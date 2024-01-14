@@ -1,0 +1,10 @@
+.vscode
+.DS_Store
+zig-cache
+zig-out
+gen
+project/lib/
+**/.godot/
+**/*.import
+src/api/extension_api.json
+src/api/gdextension_interface.h
