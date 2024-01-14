@@ -1,8 +1,18 @@
 # godot-zig
 Zig bindings for Godot 4
 
-1. ensure godot is available(in your $PATH)
-2. zig build bind (only needed for the first time or after an upgrading to new godot version)
-3. zig build
-4. godot --path ./project
-5. have fun!
+# Prerequisite:
+1. zig master build
+2. godot 4.2
+3. make sure godot is in your $PATH
+
+# Building:
+
+```
+zig build bind                 # generate zig binding for current godot version
+zig build
+godot -e --path ./project      # -e is needed to enter editor mode to import assets
+```
+
+
+# Have fun!
