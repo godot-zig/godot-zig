@@ -4,7 +4,10 @@ zig-cache
 zig-out
 gen
 project/lib/
-**/.godot/
+**/.godot/**
 **/*.import
 src/api/extension_api.json
 src/api/gdextension_interface.h
+
+!**/.godot/extension_list.cfg
+!**/.godot/global_script_class_cache.cfg
