@@ -63,9 +63,7 @@ pub fn onToggled(self: *Self, toggled_on: bool) void {
     std.debug.print("onToggled {any}\n", .{toggled_on});
 }
 ```
-<img width="640" alt="example screenshot" src="https://github.com/godot-zig/godot-zig/assets/90960/2f37cb42-0433-4a1a-8046-9ed353beea74">
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=tKkMT7AOdRM" 
-target="_blank"><img src="http://img.youtube.com/vi/tKkMT7AOdRM/0.jpg" 
-alt="godot-zig example"
-width="640" height="480" border="0" /></a>
+<img width="960" alt="example screenshot" src="https://github.com/godot-zig/godot-zig/assets/90960/2f37cb42-0433-4a1a-8046-9ed353beea74">
+<img width="960" alt="image" src="https://github.com/godot-zig/godot-zig/assets/90960/5c55aaaf-f555-4158-aeb1-104289ecc8cd">
+
 ## Have fun!
