@@ -1,21 +1,3 @@
-# godot-zig
-Zig bindings for Godot 4
-
-## Prerequisites:
-1. zig master build
-2. godot 4.2+
-3. make sure godot is in your $PATH ( 'godot --version' works)
-
-## Building:
-
-```
-zig build bind                 # generate zig bindings for current godot version
-zig build
-godot -e --path ./project      # -e is only needed for the first run to get assets imported
-```
-
-## A GDExtension class example:
-```
 const std = @import("std");
 const Godot = @import("api/Godot.zig");
 const Self = @This();
@@ -62,7 +44,3 @@ pub fn onToggled(self: *Self, toggled_on: bool) void {
     _ = self;
     std.debug.print("onToggled {any}\n", .{toggled_on});
 }
-```
-<img width="766" alt="example screenshot" src="https://github.com/godot-zig/godot-zig/assets/90960/2f37cb42-0433-4a1a-8046-9ed353beea74">
-
-## Have fun!

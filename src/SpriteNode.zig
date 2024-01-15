@@ -7,12 +7,11 @@ const Sprite = struct {
     scale: Godot.Vector2,
     gd_sprite: *Godot.Sprite2D,
 };
-
-godot_object: *Godot.Control,
-sprites: std.ArrayList(Sprite),
-
 const Self = @This();
 pub usingnamespace Godot.Control;
+godot_object: *Godot.Control,
+
+sprites: std.ArrayList(Sprite) = undefined,
 
 pub fn newSpritesNode() *Self {
     var self = Godot.create(Self);
@@ -29,10 +28,10 @@ pub fn _ready(self: *Self) void {
     const resource_loader = Godot.ResourceLoader.getSingleton();
     const tex: *Godot.Texture2D = @ptrCast(resource_loader.load("res://textures/logo.png", "", Godot.ResourceLoader.CACHE_MODE_REUSE));
     defer _ = Godot.unreference(tex);
-    const sz = self.get_parent_area_size(); //get_size();
+    const sz = self.get_parent_area_size();
 
     for (0..1000) |_| {
-        const s: f32 = @floatCast(rnd.randf_range(0.3, 0.5));
+        const s: f32 = @floatCast(rnd.randf_range(0.2, 0.6));
         const spr = Sprite{
             .pos = Godot.Vector2{ @floatCast(rnd.randf_range(0, sz[0])), @floatCast(rnd.randf_range(0, sz[1])) },
             .vel = Godot.Vector2{ @floatCast(rnd.randf_range(-1000, 1000)), @floatCast(rnd.randf_range(-1000, 1000)) },

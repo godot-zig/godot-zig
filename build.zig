@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) void {
 
     const lib = b.addSharedLibrary(.{
         .name = "example",
-        .root_source_file = .{ .path = "src/example_plugin.zig" },
+        .root_source_file = .{ .path = "src/ExamplePlugin.zig" },
         .target = target,
         .optimize = optimize,
     });

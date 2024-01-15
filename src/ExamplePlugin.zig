@@ -9,7 +9,7 @@ fn initializeLevel(_: ?*anyopaque, p_level: GDE.GDExtensionInitializationLevel) 
         return;
     }
 
-    const ExampleNode = @import("example_node.zig").ExampleNode;
+    const ExampleNode = @import("ExampleNode.zig");
     Godot.registerClass(ExampleNode);
 }
 

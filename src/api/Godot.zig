@@ -72,8 +72,10 @@ fn getBaseName(str: []const u8) []const u8 {
 }
 
 pub fn create(comptime T: type) !*T {
-    var self = try GD.general_allocator.create(T);
-    self.godot_object = @ptrCast(@alignCast(GD.classdbConstructObject(@ptrCast(getParentClassName(T)))));
+    const self = try GD.general_allocator.create(T);
+    self.* = T{
+        .godot_object = @ptrCast(@alignCast(GD.classdbConstructObject(@ptrCast(getParentClassName(T))))),
+    };
     GD.objectSetInstance(self.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
     GD.objectSetInstanceBinding(self.godot_object, GD.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
     return self;
