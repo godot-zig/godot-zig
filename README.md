@@ -1,10 +1,19 @@
 # godot-zig
 Zig bindings for Godot 4
 
+## Rationale:
+### 1. As simple as possible
+   Everyone can dig into details with ease, how gdextension works is clear. <br/>
+   ( ~180 LOC for registering a class, ~220 LOC for registering a method, while godot-cpp needs tons of not-for-human codes. )
+### 2. Ease of use yet powerful by leveraging Zig's capability
+   Enable developing a game by pure coding, which leads to less hidden logic, less mess, explicit flow control. <br/>
+   Use editor as just a tool to manage assets.<br/>
+   Coding a game is much joyful than editing a game!
+
 ## Prerequisites:
 1. zig master build
 2. godot 4.2+
-3. make sure godot is in your $PATH ( 'godot --version' works)
+3. making sure 'godot' command is available to generate bindings automatically.
 
 ## Building:
 
