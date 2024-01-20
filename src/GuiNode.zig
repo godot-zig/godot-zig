@@ -31,7 +31,7 @@ pub fn _enter_tree(self: *Self) void {
     self.sprite = Godot.Sprite2D.newSprite2D();
     self.sprite.set_texture(tex);
     self.sprite.set_position(.{ 400, 300 });
-    self.sprite.set_scale(.{ 2, 2 });
+    self.sprite.set_scale(.{ 0.6, 0.6 });
     self.add_child(self.sprite, false, Godot.Node.INTERNAL_MODE_DISABLED);
 }
 

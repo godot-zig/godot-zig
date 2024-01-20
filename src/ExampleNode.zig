@@ -14,7 +14,7 @@ pub usingnamespace Godot.Node;
 godot_object: *Godot.Node,
 
 panel: *Godot.PanelContainer = undefined,
-example_node: ?*Godot.Node = null,
+example_node: ?Godot.Node = null,
 
 fn clearScene(self: *Self) void {
     if (self.example_node) |n| {
@@ -38,8 +38,9 @@ pub fn on_item_focused(self: *Self, idx: i64) void {
     self.clearScene();
     switch (idx) {
         inline 0...Examples.len - 1 => |i| {
-            self.example_node = @ptrCast(Godot.create(Examples[i].T) catch unreachable);
-            self.panel.add_child(self.example_node.?, false, Godot.Node.INTERNAL_MODE_DISABLED);
+            const n = Godot.create(Examples[i].T) catch unreachable;
+            self.example_node = .{ .godot_object = n.godot_object }; //Godot classes in gdextension are just wrappers around a native pointer (godot_object in GodotZig).
+            self.panel.add_child(self.example_node, false, Godot.Node.INTERNAL_MODE_DISABLED);
             self.panel.grab_focus();
         },
         else => {},
