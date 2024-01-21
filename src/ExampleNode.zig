@@ -80,3 +80,9 @@ pub fn _enter_tree(self: *Self) void {
     sp.add_child(self.panel, false, Godot.Node.INTERNAL_MODE_DISABLED);
     self.add_child(sp, false, Godot.Node.INTERNAL_MODE_DISABLED);
 }
+
+pub fn _notification(self: *Self, what: i32) void {
+    if (what == Godot.Node.NOTIFICATION_WM_CLOSE_REQUEST) {
+        self.get_tree().quit(0);
+    }
+}

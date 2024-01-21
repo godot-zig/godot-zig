@@ -30,7 +30,7 @@ pub fn _ready(self: *Self) void {
     defer _ = Godot.unreference(tex);
     const sz = self.get_parent_area_size();
 
-    for (0..100) |_| {
+    for (0..10000) |_| {
         const s: f32 = @floatCast(rnd.randf_range(0.1, 0.2));
         const spr = Sprite{
             .pos = Godot.Vector2{ @floatCast(rnd.randf_range(0, sz[0])), @floatCast(rnd.randf_range(0, sz[1])) },

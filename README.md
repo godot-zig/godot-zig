@@ -12,7 +12,7 @@ Zig bindings for Godot 4
 
 ## Prerequisites:
 1. zig master build
-2. godot 4.2+
+2. godot master build
 3. making sure 'godot' command is available to generate bindings automatically.
 
 ## Building:
