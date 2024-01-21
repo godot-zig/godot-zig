@@ -73,6 +73,9 @@ fn getBaseName(str: []const u8) []const u8 {
 
 pub fn create(comptime T: type) !*T {
     const self = try GD.general_allocator.create(T);
+
+    //warning: every field of T other than godot_object must have a default value.
+    //todo: get rid of this limitation
     self.* = T{
         .godot_object = @ptrCast(@alignCast(GD.classdbConstructObject(@ptrCast(getParentClassName(T))))),
     };
@@ -265,6 +268,7 @@ pub fn registerClass(comptime T: type) void {
         }
     };
 
+    //std.debug.print("registering class {s}\n", .{@typeName(T)});
     const P = @typeInfo(std.meta.FieldType(T, .godot_object)).Pointer.child;
     getParentClassName(T).* = StringName.initFromLatin1Chars(&getBaseName(@typeName(P))[0]);
     getClassName(T).* = StringName.initFromLatin1Chars(&getBaseName(@typeName(T))[0]);

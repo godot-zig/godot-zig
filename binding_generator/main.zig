@@ -10,7 +10,7 @@ const string = []const u8;
 
 const ProcType = enum { UtilityFunction, BuiltinClassMethod, EngineClassMethod, Constructor, Destructor };
 
-const outpath = "./src/api/gen";
+var outpath: []const u8 = undefined;
 
 var temp_buf: *StreamBuilder(u8, 1024 * 1024) = undefined;
 
@@ -661,15 +661,16 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 }
             }
         }
-        // if (bc.constants) |cs| {
-        //     for (cs) |c| {
-        //         if (is_builtin_class) {
-        //             try code_builder.printLine( 1, "pub const {s}:{s} = {s};", .{ c.name, correctType(c.type, "", &temp_buf), c.value });
-        //         } else {
-        //             try code_builder.printLine( 1, "pub const {s}:c_int = {d};", .{ c.name, c.value });
-        //         }
-        //     }
-        // }
+        if (bc.constants) |cs| {
+            for (cs) |c| {
+                if (is_builtin_class) {
+                    //todo:parse value string
+                    //try code_builder.printLine(0, "pub const {s}:{s} = {s};", .{ c.name, correctType(c.type, ""), c.value });
+                } else {
+                    try code_builder.printLine(0, "pub const {s}:c_int = {d};", .{ c.name, c.value });
+                }
+            }
+        }
         if (!is_builtin_class) {
             const code =
                 \\pub var callbacks_{0s} = GDE.GDExtensionInstanceBindingCallbacks{{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback }};
@@ -823,6 +824,16 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len < 2) {
+        std.debug.print("Usage: binding_generator outpath\n", .{});
+        return;
+    }
+    outpath = try std.fs.path.join(allocator, &.{ args[1], "gen" });
+    defer allocator.free(outpath);
+
     class_size_map = StringSizeMap.init(allocator);
     defer class_size_map.deinit();
     engine_class_map = StringBoolMap.init(allocator);
@@ -840,7 +851,11 @@ pub fn main() !void {
 
     cwd = std.fs.cwd();
 
-    const contents = try cwd.readFileAlloc(allocator, "./src/api/extension_api.json", 10 * 1024 * 1024);
+    const fname = try std.fs.path.join(allocator, &.{ args[1], "extension_api.json" });
+    defer allocator.free(fname);
+
+    std.debug.print("read {s}\n", .{fname});
+    const contents = try cwd.readFileAlloc(allocator, fname, 10 * 1024 * 1024); //"./src/api/extension_api.json", 10 * 1024 * 1024);
     defer allocator.free(contents);
 
     var api = try std.json.parseFromSlice(GdExtensionApi, allocator, contents, .{ .ignore_unknown_fields = false });
