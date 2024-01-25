@@ -341,6 +341,7 @@ pub fn registerMethod(comptime T: type, comptime name: []const u8) void {
             }
         }
 
+        //not all cases are covered currently, will be improved as needed. see PtrToArg(VariantCaster) in godot-cpp/binder_common.h
         pub fn bind_ptrcall(p_method_userdata: ?*anyopaque, p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_return: GDE.GDExtensionTypePtr) callconv(.C) void {
             const method: *MethodType = @ptrCast(@alignCast(p_method_userdata));
             if (ReturnType == void or ReturnType == null) {
@@ -408,6 +409,17 @@ pub fn connect(godot_object: anytype, signal_name: [*c]const u8, instance: anyty
     registerMethod(std.meta.Child(@TypeOf(instance)), method_name);
     const callable = GD.Callable.initFromObjectStringName(instance, method_name);
     _ = godot_object.connect(signal_name, callable, 0);
+}
+
+pub fn castTo(object: anytype, comptime TargetType: type) ?*TargetType {
+    const classTag = GD.classdbGetClassTag(@ptrCast(getClassName(TargetType)));
+    const casted = GD.objectCastTo(object.godot_object, classTag);
+    if (casted) |c| {
+        if (getObjectInstanceBinding(c)) |r| {
+            return @ptrCast(@alignCast(r));
+        }
+    }
+    return null;
 }
 
 pub fn init(getProcAddress: std.meta.Child(GDE.GDExtensionInterfaceGetProcAddress), library: GDE.GDExtensionClassLibraryPtr, allocator_: std.mem.Allocator) !void {

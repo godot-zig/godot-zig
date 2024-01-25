@@ -138,7 +138,7 @@ pub fn getVariantType(comptime T: type) Type {
 pub fn init(comptime T: type, from: T) Self {
     const tid = comptime getVariantType(T);
     var result: Self = undefined;
-    from_type[@intCast(tid)].?(@ptrCast(&result), @ptrCast(&from.value));
+    from_type[@intCast(tid)].?(@ptrCast(&result), @ptrCast(@constCast(&from)));
     return result;
 }
 

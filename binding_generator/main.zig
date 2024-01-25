@@ -676,12 +676,12 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 \\pub var callbacks_{0s} = GDE.GDExtensionInstanceBindingCallbacks{{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback }};
                 \\fn instanceBindingCreateCallback(p_token: ?*anyopaque, p_instance: ?*anyopaque) callconv(.C) ?*anyopaque {{
                 \\    _ = p_token;
-                \\    var self = @as(*{0s}, @ptrCast(@alignCast(Godot.memAlloc(@sizeOf({0s})))));
+                \\    var self = Godot.general_allocator.create({0s}) catch unreachable;
                 \\    self.godot_object = @ptrCast(p_instance);
                 \\    return @ptrCast(self);
                 \\}}
                 \\fn instanceBindingFreeCallback(p_token: ?*anyopaque, p_instance: ?*anyopaque, p_binding: ?*anyopaque) callconv(.C) void {{
-                \\    Godot.memFree(p_binding.?);
+                \\    Godot.general_allocator.destroy(@as(*{0s}, @ptrCast(@alignCast(p_binding.?))));
                 \\    _ = p_instance;
                 \\    _ = p_token;
                 \\}}
@@ -694,8 +694,8 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             ;
             const constructor_code =
                 \\pub fn new{0s}() *{0s} {{
-                \\    var self = @as(*{0s}, @ptrCast(@alignCast(Godot.memAlloc(@sizeOf({0s})))));
-                \\    self.godot_object = @ptrCast(Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s}))));
+                \\    var self = Godot.general_allocator.create({0s}) catch unreachable;
+                \\    self.godot_object = @ptrCast(@alignCast(Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s})))));
                 \\    Godot.objectSetInstanceBinding(self.godot_object, Godot.p_library, @ptrCast(self), @ptrCast(&callbacks_{0s}));
                 \\    return self;
                 \\}}
@@ -711,15 +711,18 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
 
         if (isSingleton(class_name)) {
             const singleton_code =
-                \\ pub fn getSingleton() *{0s} {{
-                \\    const Singleton = struct {{
-                \\        var instance: ?*{0s} = null;
-                \\    }};
-                \\    if(Singleton.instance == null ) {{
+                \\var instance: ?*{0s} = null;
+                \\pub fn getSingleton() *{0s} {{
+                \\    if(instance == null ) {{
                 \\        const obj = Godot.globalGetSingleton(@ptrCast(Godot.getClassName({0s})));
-                \\        Singleton.instance = @ptrCast(@alignCast(Godot.objectGetInstanceBinding(obj, Godot.p_library, @ptrCast(&callbacks_{0s}))));
+                \\        instance = @ptrCast(@alignCast(Godot.objectGetInstanceBinding(obj, Godot.p_library, @ptrCast(&callbacks_{0s}))));
                 \\    }}
-                \\    return Singleton.instance.?;
+                \\    return instance.?;
+                \\}}
+                \\pub fn releaseSingleton() void {{
+                \\    if(instance)|inst| {{
+                \\        Godot.objectFreeInstanceBinding(inst.godot_object,Godot.p_library);
+                \\    }}
                 \\}}
             ;
             try code_builder.printLine(0, singleton_code, .{class_name});
