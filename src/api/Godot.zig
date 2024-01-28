@@ -99,6 +99,12 @@ pub fn registerClass(comptime T: type) void {
     if (registered_classes.contains(@typeName(T))) return;
     registered_classes.put(@typeName(T), true) catch unreachable;
 
+    //std.debug.print("registering class {s}\n", .{@typeName(T)});
+    const P = @typeInfo(std.meta.FieldType(T, .godot_object)).Pointer.child;
+    const parent_class_name = comptime getBaseName(@typeName(P));
+    getParentClassName(T).* = StringName.initFromLatin1Chars(&parent_class_name[0]);
+    getClassName(T).* = StringName.initFromLatin1Chars(&getBaseName(@typeName(T))[0]);
+
     const PerClassData = struct {
         pub var class_info: GDE.GDExtensionClassCreationInfo2 = .{
             .is_virtual = 1,
@@ -190,101 +196,18 @@ pub fn registerClass(comptime T: type) void {
             _ = p_userdata;
         }
         pub fn get_virtual_bind(p_userdata: ?*anyopaque, p_name: GDE.GDExtensionConstStringNamePtr) callconv(.C) GDE.GDExtensionClassCallVirtual {
-            _ = p_userdata;
-            if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_enter_tree")) == 0 and @hasDecl(T, "_enter_tree")) {
-                return enter_tree;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_exit_tree")) == 0 and @hasDecl(T, "_exit_tree")) {
-                return exit_tree;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_ready")) == 0 and @hasDecl(T, "_ready")) {
-                return ready;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_input")) == 0 and @hasDecl(T, "_input")) {
-                return input;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_shortcut_input")) == 0 and @hasDecl(T, "_shortcut_input")) {
-                return shortcut_input;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_unhandled_input")) == 0 and @hasDecl(T, "_unhandled_input")) {
-                return unhandled_input;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_unhandled_key_input")) == 0 and @hasDecl(T, "_unhandled_key_input")) {
-                return unhandled_key_input;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_physics_process")) == 0 and @hasDecl(T, "_physics_process")) {
-                return physics_process;
-            } else if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars("_process")) == 0 and @hasDecl(T, "_process")) {
-                return process;
-            }
-
-            return null;
+            const virtual_bind = @field(T, "get_virtual_" ++ parent_class_name);
+            return virtual_bind(T, p_userdata, p_name);
         }
         pub fn get_rid_bind(p_instance: GDE.GDExtensionClassInstancePtr) callconv(.C) u64 {
             return T._get_rid(@ptrCast(@alignCast(p_instance)));
         }
-
-        pub fn enter_tree(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_args;
-            _ = p_ret;
-            T._enter_tree(@ptrCast(@alignCast(p_instance)));
-        }
-
-        pub fn exit_tree(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_args;
-            _ = p_ret;
-            T._exit_tree(@ptrCast(@alignCast(p_instance)));
-        }
-
-        pub fn ready(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_args;
-            _ = p_ret;
-            T._ready(@ptrCast(@alignCast(p_instance)));
-        }
-
-        pub fn input(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_ret;
-            const evt: *const *const GD.InputEvent = @ptrCast(p_args);
-            if (evt.*.reference()) {
-                T._input(@ptrCast(@alignCast(p_instance)), evt.*);
-                unreference(evt.*);
-            }
-        }
-
-        pub fn shortcut_input(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_ret;
-            T._shortcut_input(@ptrCast(@alignCast(p_instance)), @ptrCast(p_args));
-        }
-        pub fn unhandled_input(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_ret;
-            T._unhandled_input(@ptrCast(@alignCast(p_instance)), @ptrCast(p_args));
-        }
-        pub fn unhandled_key_input(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_ret;
-            T._unhandled_key_input(@ptrCast(@alignCast(p_instance)), @ptrCast(p_args));
-        }
-        pub fn process(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_ret;
-            const delta: *const f64 = @ptrCast(@alignCast(p_args[0]));
-            T._process(@ptrCast(@alignCast(p_instance)), delta.*);
-        }
-        pub fn physics_process(p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_ret: GDE.GDExtensionTypePtr) callconv(.C) void {
-            _ = p_ret;
-            const delta: *const f64 = @ptrCast(@alignCast(p_args[0]));
-            T._physics_process(@ptrCast(@alignCast(p_instance)), delta.*);
-        }
     };
-
-    //std.debug.print("registering class {s}\n", .{@typeName(T)});
-    const P = @typeInfo(std.meta.FieldType(T, .godot_object)).Pointer.child;
-    getParentClassName(T).* = StringName.initFromLatin1Chars(&getBaseName(@typeName(P))[0]);
-    getClassName(T).* = StringName.initFromLatin1Chars(&getBaseName(@typeName(T))[0]);
     GD.classdbRegisterExtensionClass2(@ptrCast(GD.p_library), @ptrCast(getClassName(T)), @ptrCast(getParentClassName(T)), @ptrCast(&PerClassData.class_info));
 }
 
-var registered_methods: std.StringHashMap(bool) = undefined;
-pub fn registerMethod(comptime T: type, comptime name: []const u8) void {
-    //prevent duplicate registration
-    const fullname = std.mem.concat(GD.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", name }) catch unreachable;
-    if (registered_methods.contains(fullname)) return;
-    registered_methods.put(fullname, true) catch unreachable;
-
-    const p_method = @field(T, name);
-    const MethodBinder = struct {
-        const MethodType = @TypeOf(p_method);
+pub fn MethodBinderT(comptime MethodType: type) type {
+    return struct {
         const ReturnType = @typeInfo(MethodType).Fn.return_type;
         const ArgCount = @typeInfo(MethodType).Fn.params.len;
         const ArgsTuple = std.meta.fields(std.meta.ArgsTuple(MethodType));
@@ -295,70 +218,85 @@ pub fn registerMethod(comptime T: type, comptime name: []const u8) void {
 
         pub fn bind_call(p_method_userdata: ?*anyopaque, p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstVariantPtr, p_argument_count: GDE.GDExtensionInt, p_return: GDE.GDExtensionVariantPtr, p_error: [*c]GDE.GDExtensionCallError) callconv(.C) void {
             _ = p_error;
-            var variants: [ArgCount - 1]Variant = undefined;
-            for (0..ArgCount - 1) |i| {
-                if (i < p_argument_count) {
-                    GD.variantNewCopy(@ptrCast(&variants[i]), @ptrCast(p_args[i]));
+            const method: *MethodType = @ptrCast(@alignCast(p_method_userdata));
+            if (ArgCount == 0) {
+                if (ReturnType == void or ReturnType == null) {
+                    @call(.auto, method, .{});
+                } else {
+                    @as(*Variant, @ptrCast(p_return)).* = @call(.auto, method, .{});
+                }
+            } else {
+                var variants: [ArgCount - 1]Variant = undefined;
+                var args: std.meta.ArgsTuple(MethodType) = undefined;
+                args[0] = @ptrCast(@alignCast(p_instance));
+                inline for (0..ArgCount - 1) |i| {
+                    if (i < p_argument_count) {
+                        GD.variantNewCopy(@ptrCast(&variants[i]), @ptrCast(p_args[i]));
+                    }
+
+                    args[i + 1] = variants[i].as(ArgsTuple[i + 1].type);
+                }
+                if (ReturnType == void or ReturnType == null) {
+                    @call(.auto, method, args);
+                } else {
+                    @as(*Variant, @ptrCast(p_return)).* = @call(.auto, method, args);
                 }
             }
-            const method: *MethodType = @ptrCast(@alignCast(p_method_userdata));
+        }
 
-            switch (ArgCount) {
-                1 => if (ReturnType == void) {
-                    method(@ptrCast(@alignCast(p_instance)));
-                } else {
-                    @as(*Variant, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)));
-                },
-                2 => if (ReturnType == void) {
-                    method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1].type));
-                } else {
-                    @as(*Variant, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1].type));
-                },
-                3 => if (ReturnType == void) {
-                    method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]));
-                } else {
-                    @as(*Variant, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]));
-                },
-                4 => if (ReturnType == void) {
-                    method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]), variants[2].as(ArgsTuple[3]));
-                } else {
-                    @as(*Variant, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]), variants[2].as(ArgsTuple[3]));
-                },
-                5 => if (ReturnType == void) {
-                    method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]), variants[2].as(ArgsTuple[3]), variants[3].as(ArgsTuple[4]));
-                } else {
-                    @as(*Variant, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]), variants[2].as(ArgsTuple[3]), variants[3].as(ArgsTuple[4]));
-                },
-                6 => if (ReturnType == void) {
-                    method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]), variants[2].as(ArgsTuple[3]), variants[3].as(ArgsTuple[4]), variants[4].as(ArgsTuple[5]));
-                } else {
-                    @as(*Variant, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)), variants[0].as(ArgsTuple[1]), variants[1].as(ArgsTuple[2]), variants[2].as(ArgsTuple[3]), variants[3].as(ArgsTuple[4]), variants[4].as(ArgsTuple[5]));
+        fn ptrToArg(comptime T: type, p_arg: GDE.GDExtensionConstTypePtr) T {
+            switch (@typeInfo(T)) {
+                .Pointer => |pointer| {
+                    const ObjectType = pointer.child;
+                    const ObjectTypeName = comptime getBaseName(@typeName(ObjectType));
+                    const callbacks = @field(ObjectType, "callbacks_" ++ ObjectTypeName);
+                    if (@hasDecl(ObjectType, "reference") and @hasDecl(ObjectType, "unreference")) { //RefCounted
+                        const obj = GD.refGetObject(p_arg);
+                        return @ptrCast(@alignCast(GD.objectGetInstanceBinding(obj, GD.p_library, @ptrCast(&callbacks))));
+                    } else { //normal Object*
+                        return @ptrCast(@alignCast(GD.objectGetInstanceBinding(p_arg, GD.p_library, @ptrCast(&callbacks))));
+                    }
                 },
                 else => {
-                    std.log.err("too many args: {d}\n", ArgCount);
-                    return Variant.init(void);
+                    return @as(*T, @ptrCast(@constCast(@alignCast(p_arg)))).*;
                 },
             }
         }
 
-        //not all cases are covered currently, will be improved as needed. see PtrToArg(VariantCaster) in godot-cpp/binder_common.h
         pub fn bind_ptrcall(p_method_userdata: ?*anyopaque, p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_return: GDE.GDExtensionTypePtr) callconv(.C) void {
             const method: *MethodType = @ptrCast(@alignCast(p_method_userdata));
-            if (ReturnType == void or ReturnType == null) {
-                if (ArgCount > 1) {
-                    method(@ptrCast(@alignCast(p_instance)), @as(*ArgsTuple[1].type, @ptrCast(@constCast(@alignCast(p_args[0])))).*);
+            if (ArgCount == 0) {
+                if (ReturnType == void or ReturnType == null) {
+                    @call(.auto, method, .{});
                 } else {
-                    method(@ptrCast(@alignCast(p_instance)));
+                    @as(*ReturnType.?, @ptrCast(p_return)).* = @call(.auto, method, .{});
                 }
             } else {
-                if (ArgCount > 1) {
-                    @as(*ReturnType.?, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)), @ptrCast(@alignCast(p_args[0])));
+                var args: std.meta.ArgsTuple(MethodType) = undefined;
+                args[0] = @ptrCast(@alignCast(p_instance));
+                inline for (1..ArgCount) |i| {
+                    args[i] = ptrToArg(ArgsTuple[i].type, p_args[i - 1]);
+                }
+                if (ReturnType == void or ReturnType == null) {
+                    @call(.auto, method, args);
                 } else {
-                    @as(*ReturnType.?, @ptrCast(p_return)).* = method(@ptrCast(@alignCast(p_instance)));
+                    @as(*ReturnType.?, @ptrCast(p_return)).* = @call(.auto, method, args);
                 }
             }
         }
     };
+}
+
+var registered_methods: std.StringHashMap(bool) = undefined;
+pub fn registerMethod(comptime T: type, comptime name: []const u8) void {
+    //prevent duplicate registration
+    const fullname = std.mem.concat(GD.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", name }) catch unreachable;
+    if (registered_methods.contains(fullname)) return;
+    registered_methods.put(fullname, true) catch unreachable;
+
+    const p_method = @field(T, name);
+    const MethodBinder = MethodBinderT(@TypeOf(p_method));
+
     MethodBinder.method_name = StringName.initFromLatin1Chars(name.ptr);
     MethodBinder.arg_metadata[0] = GDE.GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
     MethodBinder.arg_properties[0] = GDE.GDExtensionPropertyInfo{

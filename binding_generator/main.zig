@@ -73,6 +73,14 @@ fn parseSingletons(api: anytype) !void {
     }
 }
 
+fn isRefCounted(type_name: string) bool {
+    const real_type = if (type_name[0] == '*') type_name[1..] else type_name;
+    if (engine_class_map.get(real_type)) |v| {
+        return v;
+    }
+    return false;
+}
+
 fn isEngineClass(type_name: string) bool {
     const real_type = if (type_name[0] == '*') type_name[1..] else type_name;
     return mem.eql(u8, real_type, "Object") or engine_class_map.contains(real_type);
@@ -129,6 +137,11 @@ fn addDependType(type_name: string) !void {
         try depends.append("Array");
     }
 
+    if (mem.startsWith(u8, depend_type, "Ref(")) {
+        depend_type = depend_type[4 .. depend_type.len - 1];
+        try depends.append("Ref");
+    }
+
     const pos = mem.indexOf(u8, depend_type, ".");
     if (pos) |p| {
         try depends.append(depend_type[0..p]);
@@ -165,7 +178,11 @@ fn correctType(type_name: string, meta: string) string {
         correct_type = correct_type[6..];
     }
 
-    if (isEngineClass(correct_type)) {
+    if (isRefCounted(correct_type)) {
+        //use weak pointer instead since Zig lack RAII
+        return temp_buf.bufPrint("*{s}", .{correct_type}) catch unreachable;
+        //return temp_buf.bufPrint("Ref({s})", .{correct_type}) catch unreachable;
+    } else if (isEngineClass(correct_type)) {
         return temp_buf.bufPrint("*{s}", .{correct_type}) catch unreachable;
     } else if (correct_type[correct_type.len - 1] == '*') {
         return temp_buf.bufPrint("*{s}", .{correct_type[0 .. correct_type.len - 1]}) catch unreachable;
@@ -221,13 +238,8 @@ fn hasAnyMethod(class_node: anytype) bool {
     if (@hasField(@TypeOf(class_node), "has_destructor")) {
         if (class_node.has_destructor) return true;
     }
-    if (class_node.methods) |ms| {
-        for (ms) |m| {
-            if (@hasDecl(@TypeOf(m), "is_virtual") and m.is_virtual) {
-                continue;
-            }
-            return true;
-        }
+    if (class_node.methods != null) {
+        return true;
     }
     if (@hasField(@TypeOf(class_node), "members")) {
         if (class_node.members) |ms| {
@@ -477,24 +489,62 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
     var generated_method_map = StringBoolMap.init(allocator);
     defer generated_method_map.deinit();
 
+    var vf_builder = try StreamBuilder(u8, 1024 * 1024).init(allocator);
+    defer vf_builder.deinit();
+
     if (class_node.methods) |ms| {
         for (ms) |m| {
             if (@hasField(@TypeOf(m), "is_virtual") and m.is_virtual) {
-                continue;
-            }
-            const func_name = m.name;
-            const return_type = blk: {
-                if (is_builtin_class) {
-                    break :blk correctType(m.return_type, "");
-                } else if (m.return_value) |ret| {
-                    break :blk correctType(ret.type, ret.meta);
-                } else {
-                    break :blk "void";
+                if (m.arguments) |as| {
+                    for (as) |a| {
+                        const arg_type = correctType(a.type, "");
+                        if (isEngineClass(arg_type) or isRefCounted(arg_type)) {
+                            //std.debug.print("engine class arg type:  {s}::{s}({s})\n", .{ class_name, m.name, arg_type });
+                        }
+                    }
                 }
-            };
-            try generated_method_map.put(func_name, true);
-            try generateProc(code_builder, m, allocator, class_name, func_name, return_type, proc_type);
+                const func_name = m.name;
+                try vf_builder.printLine(1, "if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars(\"{0s}\")) == 0 and @hasDecl(T, \"{0s}\")) {{", .{func_name});
+
+                try vf_builder.writeLine(2, "const MethodBinder = struct {");
+
+                try vf_builder.printLine(3, "pub fn {s}(p_instance: Godot.GDE.GDExtensionClassInstancePtr, p_args: [*c]const Godot.GDE.GDExtensionConstTypePtr, p_ret: Godot.GDE.GDExtensionTypePtr) callconv(.C) void {{", .{func_name});
+                try vf_builder.printLine(4, "const MethodBinder = Godot.MethodBinderT(@TypeOf(T.{s}));", .{func_name});
+                try vf_builder.printLine(4, "MethodBinder.bind_ptrcall(@ptrCast(@constCast(&T.{s})), p_instance, p_args, p_ret);", .{func_name});
+                try vf_builder.writeLine(3, "}");
+                try vf_builder.writeLine(2, "};");
+
+                try vf_builder.printLine(2, "return MethodBinder.{s};", .{func_name});
+                try vf_builder.writeLine(1, "}");
+                continue;
+            } else {
+                const func_name = m.name;
+                const return_type = blk: {
+                    if (is_builtin_class) {
+                        break :blk correctType(m.return_type, "");
+                    } else if (m.return_value) |ret| {
+                        break :blk correctType(ret.type, ret.meta);
+                    } else {
+                        break :blk "void";
+                    }
+                };
+                try generated_method_map.put(func_name, true);
+                try generateProc(code_builder, m, allocator, class_name, func_name, return_type, proc_type);
+            }
         }
+    }
+    if (!is_builtin_class) {
+        try code_builder.printLine(0, "pub fn get_virtual_{s}(comptime T:type, p_userdata: ?*anyopaque, p_name: GDE.GDExtensionConstStringNamePtr) GDE.GDExtensionClassCallVirtual {{", .{class_name});
+        try code_builder.writeLine(0, vf_builder.getWritten());
+        if (class_node.inherits.len > 0) {
+            try code_builder.printLine(1, "return Godot.{0s}.get_virtual_{0s}(T, p_userdata, p_name);", .{class_node.inherits});
+        } else {
+            try code_builder.writeLine(1, "_ = T;");
+            try code_builder.writeLine(1, "_ = p_userdata;");
+            try code_builder.writeLine(1, "_ = p_name;");
+            try code_builder.writeLine(1, "return null;");
+        }
+        try code_builder.writeLine(0, "}");
     }
     if (@hasField(@TypeOf(class_node), "members")) {
         if (class_node.members) |ms| {
@@ -614,7 +664,9 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
     var code_builder = try StreamBuilder(u8, 1024 * 1024).init(allocator);
     defer code_builder.deinit();
 
-    try parseEngineClasses(api);
+    if (!is_builtin_class) {
+        try parseEngineClasses(api);
+    }
 
     for (class_defs) |bc| {
         if (std.mem.eql(u8, bc.name, "bool") or
@@ -644,9 +696,6 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
         try code_builder.printLine(0, "pub const {s} = @This();", .{class_name});
 
         if (!is_builtin_class) {
-            try code_builder.printLine(0, "pub fn as{0s}(self:anytype) Godot.{0s} {{", .{class_name});
-            try code_builder.printLine(1, "return Godot.{0s}{{.godot_object = self.godot_object}};", .{class_name});
-            try code_builder.writeLine(0, "}");
             if (bc.inherits.len > 0) {
                 try code_builder.printLine(0, "pub usingnamespace Godot.{s};", .{bc.inherits});
             }
@@ -672,7 +721,48 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             }
         }
         if (!is_builtin_class) {
-            const code =
+            const constructor_code =
+                \\pub fn new{0s}() *{0s} {{
+                \\    var self = Godot.general_allocator.create({0s}) catch unreachable;
+                \\    self.godot_object = @ptrCast(@alignCast(Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s})))));
+                \\    Godot.objectSetInstanceBinding(self.godot_object, Godot.p_library, @ptrCast(self), @ptrCast(&callbacks_{0s}));
+                \\    return self;
+                \\}}
+            ;
+
+            try all_callback_classes.append(class_name);
+            if (!isSingleton(class_name)) {
+                try code_builder.printLine(0, constructor_code, .{class_name});
+            }
+        }
+
+        if (isSingleton(class_name)) {
+            const singleton_code =
+                \\var instance: ?*{0s} = null;
+                \\pub fn getSingleton() *{0s} {{
+                \\    if(instance == null ) {{
+                \\        const obj = Godot.globalGetSingleton(@ptrCast(Godot.getClassName({0s})));
+                \\        instance = @ptrCast(@alignCast(Godot.objectGetInstanceBinding(obj, Godot.p_library, @ptrCast(&callbacks_{0s}))));
+                \\    }}
+                \\    return instance.?;
+                \\}}
+                \\pub fn releaseSingleton() void {{
+                \\    if(instance)|inst| {{
+                \\        Godot.objectFreeInstanceBinding(inst.godot_object,Godot.p_library);
+                \\        instance = null;
+                \\    }}
+                \\}}
+            ;
+            try code_builder.printLine(0, singleton_code, .{class_name});
+        }
+
+        if (hasAnyMethod(bc)) {
+            try generateConstructor(bc, code_builder, allocator);
+            try generateMethod(bc, code_builder, allocator, is_builtin_class);
+        }
+
+        if (!is_builtin_class) {
+            const callbacks_code =
                 \\pub var callbacks_{0s} = GDE.GDExtensionInstanceBindingCallbacks{{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback }};
                 \\fn instanceBindingCreateCallback(p_token: ?*anyopaque, p_instance: ?*anyopaque) callconv(.C) ?*anyopaque {{
                 \\    _ = p_token;
@@ -692,45 +782,7 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 \\    return 1;
                 \\}}
             ;
-            const constructor_code =
-                \\pub fn new{0s}() *{0s} {{
-                \\    var self = Godot.general_allocator.create({0s}) catch unreachable;
-                \\    self.godot_object = @ptrCast(@alignCast(Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s})))));
-                \\    Godot.objectSetInstanceBinding(self.godot_object, Godot.p_library, @ptrCast(self), @ptrCast(&callbacks_{0s}));
-                \\    return self;
-                \\}}
-            ;
-
-            try all_callback_classes.append(class_name);
-            try code_builder.printLine(0, code, .{class_name});
-
-            if (!isSingleton(class_name)) {
-                try code_builder.printLine(0, constructor_code, .{class_name});
-            }
-        }
-
-        if (isSingleton(class_name)) {
-            const singleton_code =
-                \\var instance: ?*{0s} = null;
-                \\pub fn getSingleton() *{0s} {{
-                \\    if(instance == null ) {{
-                \\        const obj = Godot.globalGetSingleton(@ptrCast(Godot.getClassName({0s})));
-                \\        instance = @ptrCast(@alignCast(Godot.objectGetInstanceBinding(obj, Godot.p_library, @ptrCast(&callbacks_{0s}))));
-                \\    }}
-                \\    return instance.?;
-                \\}}
-                \\pub fn releaseSingleton() void {{
-                \\    if(instance)|inst| {{
-                \\        Godot.objectFreeInstanceBinding(inst.godot_object,Godot.p_library);
-                \\    }}
-                \\}}
-            ;
-            try code_builder.printLine(0, singleton_code, .{class_name});
-        }
-
-        if (hasAnyMethod(bc)) {
-            try generateConstructor(bc, code_builder, allocator);
-            try generateMethod(bc, code_builder, allocator, is_builtin_class);
+            try code_builder.printLine(0, callbacks_code, .{class_name});
         }
 
         const code = try addImports(class_name, code_builder, allocator);

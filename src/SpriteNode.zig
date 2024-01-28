@@ -48,6 +48,8 @@ pub fn _ready(self: *Self) void {
 
 pub fn _exit_tree(self: *Self) void {
     self.sprites.deinit();
+    Godot.Engine.releaseSingleton();
+    Godot.ResourceLoader.releaseSingleton();
 }
 
 pub fn _physics_process(self: *Self, delta: f64) void {

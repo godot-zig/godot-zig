@@ -35,6 +35,12 @@ pub fn _enter_tree(self: *Self) void {
     self.add_child(self.sprite, false, Godot.Node.INTERNAL_MODE_DISABLED);
 }
 
+pub fn _exit_tree(self: *Self) void {
+    _ = self;
+    Godot.ResourceLoader.releaseSingleton();
+    Godot.Engine.releaseSingleton();
+}
+
 pub fn onPressed(self: *Self) void {
     _ = self;
     std.debug.print("onPressed \n", .{});
