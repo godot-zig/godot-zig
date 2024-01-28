@@ -1,15 +1,6 @@
 # godot-zig
 Zig bindings for Godot 4
 
-## Rationale:
-### 1. As simple as possible
-   Everyone can dig into details with ease, how gdextension works is clear. <br/>
-   ( ~180 LOC for registering a class, ~220 LOC for registering a method, while godot-cpp needs tons of not-for-human codes. )
-### 2. Ease of use yet powerful by leveraging Zig's capability
-   Enable developing a game by pure coding, which leads to less hidden logic, less mess, explicit flow control. <br/>
-   Use editor as just a tool to manage assets.<br/>
-   Coding a game is much joyful than editing a game!
-
 ## Prerequisites:
 1. zig master build
 2. godot master build
@@ -72,8 +63,9 @@ pub fn onToggled(self: *Self, toggled_on: bool) void {
     std.debug.print("onToggled {any}\n", .{toggled_on});
 }
 ```
-<img width="960" alt="example screenshot1" src="https://github.com/godot-zig/godot-zig/assets/90960/c3058798-77b9-4243-b92c-7d306f943e82">
-<img width="960" alt="example screenshot2" src="https://github.com/godot-zig/godot-zig/assets/90960/078559cc-fa46-4d01-94e2-4fd34e6d30bd">
+<img width="960" alt="example screenshot1" src="https://github.com/godot-zig/godot-zig/assets/90960/55cddaf9-18a9-4f15-97e1-669d80e9c34f">
+<img width="960" alt="example screenshot2" src="https://github.com/godot-zig/godot-zig/assets/90960/aea7ab54-3e72-4d6b-b370-01862f9e91e0">
+
 
 ## Have fun!
 
