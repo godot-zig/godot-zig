@@ -107,9 +107,9 @@ pub fn registerClass(comptime T: type) void {
 
     const PerClassData = struct {
         pub var class_info: GDE.GDExtensionClassCreationInfo2 = .{
-            .is_virtual = 1,
+            .is_virtual = 0,
             .is_abstract = 0,
-            .is_exposed = 0,
+            .is_exposed = 1,
             .set_func = if (@hasDecl(T, "_set")) set_bind else null,
             .get_func = if (@hasDecl(T, "_get")) get_bind else null,
             .get_property_list_func = if (@hasDecl(T, "_get_property_list")) get_property_list_bind else null,
