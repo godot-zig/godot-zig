@@ -14,7 +14,7 @@ fn initializeLevel(_: ?*anyopaque, p_level: GDE.GDExtensionInitializationLevel) 
 }
 
 fn deinitializeLevel(userdata: ?*anyopaque, p_level: GDE.GDExtensionInitializationLevel) callconv(.C) void {
-    if (p_level != GDE.GDEXTENSION_INITIALIZATION_SCENE) {
+    if (p_level != GDE.GDEXTENSION_INITIALIZATION_CORE) {
         return;
     }
 
