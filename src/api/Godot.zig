@@ -41,16 +41,20 @@ pub fn unreference(refcounted_obj: anytype) void {
 }
 
 pub fn getClassName(comptime T: type) *StringName {
-    _ = T;
     const C = struct {
+        pub fn makeItUniqueForT() i8 {
+            return @sizeOf(T);
+        }
         pub var class_name: StringName = undefined;
     };
     return &C.class_name;
 }
 
 pub fn getParentClassName(comptime T: type) *StringName {
-    _ = T;
     const C = struct {
+        pub fn makeItUniqueForT() i8 {
+            return @sizeOf(T);
+        }
         pub var parent_class_name: StringName = undefined;
     };
     return &C.parent_class_name;
