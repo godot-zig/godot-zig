@@ -73,6 +73,10 @@ fn parseSingletons(api: anytype) !void {
     }
 }
 
+fn isStringType(type_name:string) bool {
+    return mem.eql(u8, type_name, "String") or mem.eql(u8, type_name, "StringName");
+}
+
 fn isRefCounted(type_name: string) bool {
     const real_type = if (type_name[0] == '*') type_name[1..] else type_name;
     if (engine_class_map.get(real_type)) |v| {
@@ -288,6 +292,9 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
         try code_builder.print(0, "pub fn {s}(", .{correctName(func_name)});
     }
 
+    const is_const = (proc_type == .BuiltinClassMethod or proc_type == .EngineClassMethod) and fn_node.is_const;
+    const is_vararg = proc_type != .Constructor and proc_type != .Destructor and fn_node.is_vararg;
+
     var args = std.ArrayList(string).init(allocator);
     defer args.deinit();
     var arg_types = std.ArrayList(string).init(allocator);
@@ -295,7 +302,12 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
     const need_return = !mem.eql(u8, return_type, "void");
     var is_first_arg = true;
     if (proc_type == .BuiltinClassMethod or proc_type == .Destructor) {
-        _ = try code_builder.writer.write("self: *Self");
+        if (is_const) {
+            _ = try code_builder.writer.write("self: Self");
+        } else {
+            _ = try code_builder.writer.write("self: *Self");
+        }
+
         is_first_arg = false;
     } else if (proc_type == .EngineClassMethod) {
         _ = try code_builder.writer.write("self: anytype");
@@ -321,8 +333,9 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
                 if (isEngineClass(arg_type)) {
                     try code_builder.writer.print("{s}: anytype", .{arg_name});
                 } else {
-                    if (mem.eql(u8, arg_type, "String") or mem.eql(u8, arg_type, "StringName")) {
-                        try code_builder.writer.print("{s}: anytype", .{arg_name});
+                    //String or StringName parameters are transformed to [:0]const u8 for convenience, except for that from String&StringName itself
+                    if (((!mem.eql(u8, class_name, "String") and !mem.eql(u8, class_name, "StringName")) or proc_type != .Constructor) and (mem.eql(u8, arg_type, "String") or mem.eql(u8, arg_type, "StringName"))) {
+                        try code_builder.writer.print("{s}: [:0]const u8", .{arg_name});
                     } else {
                         try code_builder.writer.print("{s}: {s}", .{ arg_name, arg_type });
                     }
@@ -331,6 +344,16 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
                 try args.append(arg_name);
                 try arg_types.append(arg_type);
             }
+        }
+
+        if(is_vararg) {
+            if (!is_first_arg) {
+                _ = try code_builder.writer.write(", ");
+            }
+            const arg_name = "varargs";
+            try code_builder.writer.print("{s}: anytype", .{arg_name});
+            try args.append(arg_name);
+            try arg_types.append("anytype");
         }
     }
 
@@ -346,19 +369,30 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
 
     var arg_array: string = "null";
     var arg_count: string = "0";
-    if (args.items.len > 0) {
+ 
+    if( is_vararg) {
+        try code_builder.writeLine(1, "const fields = @import(\"std\").meta.fields(@TypeOf(varargs));");
+        try code_builder.printLine(1, "var args:[fields.len + {d}]*const Godot.Variant = undefined;", .{args.items.len-1});
+        for (0..args.items.len-1)|i| {
+            if( isStringType(arg_types.items[i])) {
+                try code_builder.printLine(1, "args[{d}] = &Godot.Variant.initFrom(Godot.String.initFromLatin1Chars({s}));", .{i, args.items[i]});            
+            } else {
+                 try code_builder.printLine(1, "args[{d}] = &Godot.Variant.initFrom({s});", .{i, args.items[i]});                           
+            }
+        }
+        try code_builder.writeLine(1, "inline for(fields, 0..)|f, i|{");
+        try code_builder.printLine(2, "args[{d}+i] = &Godot.Variant.initFrom(@field(varargs, f.name));", .{args.items.len-1});
+        try code_builder.writeLine(1, "}");        
+    }
+    else if (args.items.len > 0) {
         try code_builder.printLine(1, "var args:[{d}]GDE.GDExtensionConstTypePtr = undefined;", .{args.items.len});
         for (0..args.items.len) |i| {
             if (isEngineClass(arg_types.items[i])) {
                 try code_builder.printLine(1, "if(@typeInfo(@TypeOf({1s})) == .Pointer) {{ args[{0d}] = @ptrCast(&({1s}.godot_object)); }}", .{ i, args.items[i] });
                 try code_builder.printLine(1, "else if({1s} == null) {{ args[{0d}] = null; }} else {{ args[{0d}] = @ptrCast(&({1s}.?.godot_object)); }}", .{ i, args.items[i] });
             } else {
-                if (mem.eql(u8, arg_types.items[i], "String") or mem.eql(u8, arg_types.items[i], "StringName")) {
-                    try code_builder.printLine(1, "if(@TypeOf({0s}) == StringName or @TypeOf({0s}) == String) {{", .{args.items[i]});
-                    try code_builder.printLine(2, "args[{d}] = @ptrCast(&{s});", .{ i, args.items[i] });
-                    try code_builder.writeLine(1, "} else {");
-                    try code_builder.printLine(2, "args[{d}] = @ptrCast(&{s}.initFromLatin1Chars(@as([*c]const u8, &{s}[0])));", .{ i, arg_types.items[i], args.items[i] });
-                    try code_builder.writeLine(1, "}");
+                if ((proc_type != .Constructor or !isStringType(class_name)) and (isStringType(arg_types.items[i]))){
+                    try code_builder.printLine(1, "args[{d}] = @ptrCast(&{s}.initFromLatin1Chars({s}));", .{ i, arg_types.items[i], args.items[i] });
                 } else {
                     try code_builder.printLine(1, "args[{d}] = @ptrCast(&{s});", .{ i, args.items[i] });
                 }
@@ -386,9 +420,18 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             try code_builder.printLine(2, "const func_name = StringName.initFromLatin1Chars(\"{s}\");", .{func_name});
             try code_builder.printLine(2, "Binding.method = Godot.classdbGetMethodBind(@ptrCast(Godot.getClassName({s})), @ptrCast(&func_name), {d});", .{ class_name, fn_node.hash });
             try code_builder.writeLine(1, "}");
-            try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(self.godot_object), {s}, {s});", .{ arg_array, result_string });
-            if (isEngineClass(return_type)) {
-                try code_builder.writeLine(1, "result = @ptrCast(@alignCast(Godot.getObjectInstanceBinding(@ptrCast(result))));");
+            if( is_vararg) {
+                try code_builder.writeLine(1, "var err:GDE.GDExtensionCallError = undefined;");
+	            try code_builder.writeLine(1, "var ret:Variant = Variant.init();");
+                try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(self.godot_object), @ptrCast(@alignCast(&args[0])), args.len, &ret, &err);");
+                if( need_return) {
+                    try code_builder.printLine(1, "result = ret.as({s});", .{return_type});
+                }
+            }else {
+                try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(self.godot_object), {s}, {s});", .{ arg_array, result_string });
+                if (isEngineClass(return_type)) {
+                    try code_builder.writeLine(1, "result = @ptrCast(@alignCast(Godot.getObjectInstanceBinding(@ptrCast(result))));");
+                }
             }
         },
         .BuiltinClassMethod => {
@@ -397,7 +440,7 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             try code_builder.printLine(2, "const func_name = StringName.initFromLatin1Chars(\"{s}\");", .{func_name});
             try code_builder.printLine(2, "Binding.method = Godot.variantGetPtrBuiltinMethod({s}, @ptrCast(&func_name.value), {d});", .{ enum_type_name, fn_node.hash });
             try code_builder.writeLine(1, "}");
-            try code_builder.printLine(1, "Binding.method.?(@ptrCast(&self.value), {s}, {s}, {s});", .{ arg_array, result_string, arg_count });
+            try code_builder.printLine(1, "Binding.method.?(@ptrCast(@constCast(&self.value)), {s}, {s}, {s});", .{ arg_array, result_string, arg_count });
         },
         .Constructor => {
             try code_builder.writeLine(1, "const Binding = struct{ pub var method:GDE.GDExtensionPtrConstructor = null; };");
@@ -429,27 +472,27 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
     const class_name = correctName(class_node.name);
 
     const string_class_extra_constructors_code =
-        \\pub fn initFromLatin1Chars(chars:[*c]const u8) Self{
+        \\pub fn initFromLatin1Chars(chars:[:0]const u8) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithLatin1Chars(@ptrCast(&self.value), chars);
         \\    return self;
         \\}
-        \\pub fn initFromUtf8Chars(chars:[*c]const u8) Self{
+        \\pub fn initFromUtf8Chars(chars:[:0]const u8) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithUtf8Chars(@ptrCast(&self.value), chars);
         \\    return self;
         \\}
-        \\pub fn initFromUtf16Chars(chars:[*c]const GDE.char16_t) Self{
+        \\pub fn initFromUtf16Chars(chars:[:0]const GDE.char16_t) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithUtf16Chars(@ptrCast(&self.value), chars);
         \\    return self;
         \\}
-        \\pub fn initFromUtf32Chars(chars:[*c]const GDE.char32_t) Self{
+        \\pub fn initFromUtf32Chars(chars:[:0]const GDE.char32_t) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithUtf32Chars(@ptrCast(&self.value), chars);
         \\    return self;
         \\}
-        \\pub fn initFromWideChars(chars:[*c]const GDE.wchar_t) Self{
+        \\pub fn initFromWideChars(chars:[:0]const GDE.wchar_t) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithWideChars(@ptrCast(&self.value), chars);
         \\    return self;
@@ -457,9 +500,25 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
     ;
 
     const string_name_class_extra_constructors_code =
-        \\pub fn initFromLatin1Chars(chars:[*c]const u8) Self{
-        \\    const string: String = String.initFromLatin1Chars(chars);
-        \\    return initFromString(string);
+        \\pub fn initStaticFromLatin1Chars(chars:[:0]const u8) Self{
+        \\    var self: Self = undefined;
+        \\    Godot.stringNameNewWithLatin1Chars(@ptrCast(&self.value), chars, 1);
+        \\    return self;
+        \\}
+        \\pub fn initFromLatin1Chars(chars:[:0]const u8) Self{
+        \\    var self: Self = undefined;
+        \\    Godot.stringNameNewWithLatin1Chars(@ptrCast(&self.value), chars, 0);
+        \\    return self;
+        \\}
+        \\pub fn initFromUtf8Chars(chars:[:0]const u8) Self{
+        \\    var self: Self = undefined;
+        \\    Godot.stringNameNewWithUtf8Chars(@ptrCast(&self.value), chars);
+        \\    return self;
+        \\}
+        \\pub fn initFromUtf8CharsAndLen(chars:[:0]const u8, len:i32) Self{
+        \\    var self: Self = undefined;
+        \\    Godot.stringNameNewWithUtf8CharsAndLen(@ptrCast(&self.value), chars, len);
+        \\    return self;
         \\}
     ;
 
@@ -476,7 +535,7 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
         }
 
         if (class_node.has_destructor) {
-            try generateProc(code_builder, void, allocator, class_name, "deinit", "void", .Destructor);
+            try generateProc(code_builder, null, allocator, class_name, "deinit", "void", .Destructor);
         }
     }
 }
@@ -504,7 +563,7 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                     }
                 }
                 const func_name = m.name;
-                try vf_builder.printLine(1, "if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(String.initFromLatin1Chars(\"{0s}\")) == 0 and @hasDecl(T, \"{0s}\")) {{", .{func_name});
+                try vf_builder.printLine(1, "if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(\"{0s}\") == 0 and @hasDecl(T, \"{0s}\")) {{", .{func_name});
 
                 try vf_builder.writeLine(2, "const MethodBinder = struct {");
 
@@ -686,6 +745,7 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
 
         code_builder.reset();
         depends.clearRetainingCapacity();
+        try code_builder.printLine(0, "pub const {s} = extern struct {{", .{class_name});
 
         if (is_builtin_class) {
             try code_builder.printLine(0, "value:[{d}]u8,", .{class_size_map.get(class_name).?});
@@ -693,7 +753,6 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             try code_builder.writeLine(0, "godot_object: ?*anyopaque,\n");
         }
         try code_builder.writeLine(0, "pub const Self = @This();");
-        try code_builder.printLine(0, "pub const {s} = @This();", .{class_name});
 
         if (!is_builtin_class) {
             if (bc.inherits.len > 0) {
@@ -723,7 +782,7 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
         if (!is_builtin_class) {
             const constructor_code =
                 \\pub fn new{0s}() *{0s} {{
-                \\    var self = Godot.general_allocator.create({0s}) catch unreachable;
+                \\    var self = @as(*{0s}, @ptrCast(@alignCast(Godot.memAlloc(@sizeOf({0s})))));
                 \\    self.godot_object = @ptrCast(@alignCast(Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s})))));
                 \\    Godot.objectSetInstanceBinding(self.godot_object, Godot.p_library, @ptrCast(self), @ptrCast(&callbacks_{0s}));
                 \\    return self;
@@ -766,12 +825,14 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 \\pub var callbacks_{0s} = GDE.GDExtensionInstanceBindingCallbacks{{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback }};
                 \\fn instanceBindingCreateCallback(p_token: ?*anyopaque, p_instance: ?*anyopaque) callconv(.C) ?*anyopaque {{
                 \\    _ = p_token;
-                \\    var self = Godot.general_allocator.create({0s}) catch unreachable;
+                \\    var self = @as(*{0s}, @ptrCast(@alignCast(Godot.memAlloc(@sizeOf({0s})))));
+                \\    //var self = Godot.general_allocator.create({0s}) catch unreachable;
                 \\    self.godot_object = @ptrCast(p_instance);
                 \\    return @ptrCast(self);
                 \\}}
                 \\fn instanceBindingFreeCallback(p_token: ?*anyopaque, p_instance: ?*anyopaque, p_binding: ?*anyopaque) callconv(.C) void {{
-                \\    Godot.general_allocator.destroy(@as(*{0s}, @ptrCast(@alignCast(p_binding.?))));
+                \\    //Godot.general_allocator.destroy(@as(*{0s}, @ptrCast(@alignCast(p_binding.?))));
+                \\    Godot.memFree(p_binding.?);
                 \\    _ = p_instance;
                 \\    _ = p_token;
                 \\}}
@@ -784,6 +845,8 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             ;
             try code_builder.printLine(0, callbacks_code, .{class_name});
         }
+
+        try code_builder.printLine(0, "}};", .{});
 
         const code = try addImports(class_name, code_builder, allocator);
         defer allocator.free(code);
@@ -808,7 +871,11 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
     try code_builder.writeLine(0, "});");
 
     for (all_classes.items) |cls| {
-        try code_builder.printLine(0, "pub const {0s} = @import(\"{0s}.zig\");", .{cls});
+        if( mem.eql(u8, cls, "GlobalEnums")) {
+            try code_builder.printLine(0, "pub const {0s} = @import(\"{0s}.zig\");", .{cls});           
+        } else {
+            try code_builder.printLine(0, "pub const {0s} = @import(\"{0s}.zig\").{0s};", .{cls});
+        }
     }
 
     try code_builder.writeLine(0, "pub var general_allocator: std.mem.Allocator = undefined;");

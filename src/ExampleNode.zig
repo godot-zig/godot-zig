@@ -3,10 +3,11 @@ const Godot = @import("api/Godot.zig");
 const Vector2 = Godot.Vector2;
 const SpritesNode = @import("SpriteNode.zig");
 const GuiNode = @import("GuiNode.zig");
-
-const Examples = [_]struct { name: []const u8, T: type }{
+const SignalNode = @import("SignalNode.zig");
+const Examples = [_]struct { name: [:0]const u8, T: type }{
     .{ .name = "Sprites", .T = SpritesNode },
     .{ .name = "GUI", .T = GuiNode },
+    .{ .name = "Signals", .T = SignalNode },
 };
 
 const Self = @This();
@@ -16,6 +17,12 @@ godot_object: *Godot.Node,
 panel: *Godot.PanelContainer = undefined,
 example_node: ?Godot.Node = null,
 
+property1:Godot.Vector3 = Godot.Vector3{42,42,42},
+property2:Godot.Vector3 = Godot.Vector3{24,24,24},
+
+const property1_name: [:0]const u8 = "Property1";
+const property2_name: [:0]const u8 = "Property2";
+
 fn clearScene(self: *Self) void {
     if (self.example_node) |n| {
         n.queue_free();
@@ -23,14 +30,11 @@ fn clearScene(self: *Self) void {
     }
 }
 
-pub fn onTimeout(self: *Self) void {
-    _ = self;
+pub fn onTimeout(_: *Self) void {
     std.debug.print("onTimeout\n", .{});
 }
 
-pub fn onResized(self: *Self) void {
-    _ = self; // autofix
-
+pub fn onResized(_: *Self) void {
     std.debug.print("onResized\n", .{});
 }
 
@@ -48,12 +52,16 @@ pub fn on_item_focused(self: *Self, idx: i64) void {
 }
 
 pub fn _enter_tree(self: *Self) void {
-    Godot.registerClass(SpritesNode);
-    Godot.registerClass(GuiNode);
-
-    if (Godot.Engine.getSingleton().is_editor_hint()) return;
+    inline for(Examples) |E| {
+        Godot.registerClass(E.T);
+    }
+    
     //initialize fields
     self.example_node = null;
+    self.property1 = Godot.Vector3{111,111,111};
+    self.property2 = Godot.Vector3{222,222,222};
+
+    if (Godot.Engine.getSingleton().is_editor_hint()) return;
 
     const window_size = self.get_tree().get_root().get_size();
     var sp = Godot.HSplitContainer.newHSplitContainer();
@@ -88,6 +96,74 @@ pub fn _exit_tree(self: *Self) void {
 
 pub fn _notification(self: *Self, what: i32) void {
     if (what == Godot.Node.NOTIFICATION_WM_CLOSE_REQUEST) {
-        self.get_tree().quit(0);
+        if (!Godot.Engine.getSingleton().is_editor_hint()) {
+            self.get_tree().quit(0);
+        }
     }
+}
+
+pub fn _get_property_list(_: *Self) []const Godot.PropertyInfo {
+    const C = struct {
+        var properties:[32]Godot.PropertyInfo = undefined;
+    };
+
+    C.properties[0] = Godot.PropertyInfo.init(Godot.GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3,Godot.StringName.initFromLatin1Chars(property1_name));
+    C.properties[1] = Godot.PropertyInfo.init(Godot.GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3,Godot.StringName.initFromLatin1Chars(property2_name));
+    
+    return C.properties[0..2];
+}
+
+pub fn _property_can_revert(_:*Self, name: Godot.StringName) bool {
+    if (name.casecmp_to(property1_name) == 0) {
+        return true;
+    }
+    else if (name.casecmp_to(property2_name) == 0) {
+        return true;
+    }
+
+    return false;
+}
+
+pub fn _property_get_revert(_:*Self, name: Godot.StringName, value:*Godot.Variant) bool
+{
+    if (name.casecmp_to(property1_name) == 0) {
+        value.* = Godot.Variant.initFrom(Godot.Vector3{ 42, 42, 42 });
+        return true;
+    }
+    else if (name.casecmp_to(property2_name) == 0) {
+        value.* = Godot.Variant.initFrom(Godot.Vector3{ 24, 24, 24 });
+        return true;
+    }
+
+    return false;
+}
+
+pub fn _set(self: *Self, name: Godot.StringName, value: Godot.Variant) bool {
+    if (name.casecmp_to(property1_name) == 0) {
+        self.property1 = value.as(Godot.Vector3);
+        return true;
+    }
+    else if (name.casecmp_to(property2_name) == 0) {
+        self.property2 = value.as(Godot.Vector3);
+        return true;
+    }
+
+    return false;
+}
+
+pub fn _get(self: *Self, name: Godot.StringName, value: *Godot.Variant) bool {
+    if (name.casecmp_to(property1_name) == 0) {
+        value.* = Godot.Variant.initFrom(self.property1);
+        return true;
+    }
+    else if (name.casecmp_to(property2_name) == 0) {
+        value.* = Godot.Variant.initFrom(self.property2);
+        return true;
+    }
+
+    return false;
+}
+
+pub fn _to_string(_: *Self) ?Godot.String {
+    return Godot.String.initFromLatin1Chars("ExampleNode");
 }

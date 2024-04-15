@@ -45,14 +45,17 @@ pub fn createBindStep(b: *std.Build, target: std.Build.ResolvedTarget) *std.Buil
     });
     const out_path = b.pathJoin(&.{ thisDir(), api_path });
     dump_cmd.setCwd(.{ .cwd_relative = out_path });
+    const dump_step = b.step("dump", "dump api");
+    dump_step.dependOn(&dump_cmd.step);
 
     const binding_generator = b.addExecutable(.{ .name = "binding_generator", .target = target, .root_source_file = .{ .path = b.pathJoin(&.{ thisDir(), "binding_generator/main.zig" }) } });
     binding_generator.addIncludePath(.{ .path = out_path });
-    binding_generator.step.dependOn(&dump_cmd.step);
+    //binding_generator.step.dependOn(dump_step);
 
     const generate_binding = std.Build.Step.Run.create(b, "bind_godot");
     generate_binding.addArtifactArg(binding_generator);
     generate_binding.addArgs(&.{out_path});
+
     const bind_step = b.step("bind", "generate godot bindings");
     bind_step.dependOn(&generate_binding.step);
     return bind_step;
