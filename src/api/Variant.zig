@@ -3,7 +3,11 @@ const Godot = @import("Godot.zig");
 const GDE = Godot.GDE;
 const Self = @This();
 const Variant = Godot.Variant;
-value: [24]u8,
+const precision = @import("build_options").precision;
+const size = if(std.mem.eql(u8, precision, "double")) 40 else 24;
+
+value: [size]u8,
+
 const Type = c_int;
 const TYPE_NIL: c_int = 0;
 const TYPE_BOOL: c_int = 1;

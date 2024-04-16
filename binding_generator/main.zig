@@ -949,8 +949,8 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    if (args.len < 2) {
-        std.debug.print("Usage: binding_generator outpath\n", .{});
+    if (args.len < 4) {
+        std.debug.print("Usage: binding_generator outpath precision arch\n", .{});
         return;
     }
     outpath = try std.fs.path.join(allocator, &.{ args[1], "gen" });
@@ -976,7 +976,6 @@ pub fn main() !void {
     const fname = try std.fs.path.join(allocator, &.{ args[1], "extension_api.json" });
     defer allocator.free(fname);
 
-    std.debug.print("read {s}\n", .{fname});
     const contents = try cwd.readFileAlloc(allocator, fname, 10 * 1024 * 1024); //"./src/api/extension_api.json", 10 * 1024 * 1024);
     defer allocator.free(contents);
 
@@ -986,7 +985,8 @@ pub fn main() !void {
     try cwd.deleteTree(outpath);
     try cwd.makePath(outpath);
 
-    try parseClassSizes(api, "float_64");
+    const conf = try temp_buf.bufPrint("{s}_{s}", .{args[2], args[3]});
+    try parseClassSizes(api, conf);
     try parseSingletons(api);
     try generateGlobalEnums(api, allocator);
     try generateUtilityFunctions(api, allocator);
@@ -995,5 +995,5 @@ pub fn main() !void {
 
     try generateGodotCore(allocator);
 
-    std.debug.print("\nZig bindings for {s} have been successfully generated, have fun!\n", .{api.value.header.version_full_name});
+    std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{conf, api.value.header.version_full_name});
 }
