@@ -51,7 +51,7 @@ pub fn build(b: *std.Build) void {
 
 pub fn createBindStep(b: *std.Build, target: std.Build.ResolvedTarget, precision: []const u8, arch: []const u8, godot_path: []const u8) *std.Build.Step {
     const dump_cmd = b.addSystemCommand(&.{
-        godot_path, "--dump-extension-api", "--dump-gdextension-interface",
+        godot_path, "--dump-extension-api", "--dump-gdextension-interface", "--headless",
     });
     const out_path = b.pathJoin(&.{ thisDir(), api_path });
     dump_cmd.setCwd(.{ .cwd_relative = out_path });
