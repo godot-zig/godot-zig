@@ -60,7 +60,7 @@ pub fn createBindStep(b: *std.Build, target: std.Build.ResolvedTarget, precision
 
     const binding_generator = b.addExecutable(.{ .name = "binding_generator", .target = target, .root_source_file = .{ .path = b.pathJoin(&.{ thisDir(), "binding_generator/main.zig" }) } });
     binding_generator.addIncludePath(.{ .path = out_path });
-    //binding_generator.step.dependOn(dump_step);
+    binding_generator.step.dependOn(dump_step);
 
     const generate_binding = std.Build.Step.Run.create(b, "bind_godot");
     generate_binding.addArtifactArg(binding_generator);
