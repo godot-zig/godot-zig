@@ -18,8 +18,9 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const precision = b.option([]const u8, "precision", "double") orelse "float";
     const arch = b.option([]const u8, "arch", "32") orelse "64";
+    const godot_path = b.option([]const u8, "godot", "godot path") orelse "godot";
 
-    const bind_step = createBindStep(b, target, precision, arch);
+    const bind_step = createBindStep(b, target, precision, arch, godot_path);
 
     const lib = b.addSharedLibrary(.{
         .name = "example",
@@ -41,16 +42,16 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     const run_cmd = b.addSystemCommand(&.{
-        "godot", "--path", "./project",
+        godot_path, "--path", "./project",
     });
     run_cmd.step.dependOn(b.getInstallStep());
     const run_step = b.step("run", "run with Godot");
     run_step.dependOn(&run_cmd.step);
 }
 
-pub fn createBindStep(b: *std.Build, target: std.Build.ResolvedTarget, precision: []const u8, arch: []const u8) *std.Build.Step {
+pub fn createBindStep(b: *std.Build, target: std.Build.ResolvedTarget, precision: []const u8, arch: []const u8, godot_path: []const u8) *std.Build.Step {
     const dump_cmd = b.addSystemCommand(&.{
-        "godot", "--dump-extension-api", "--dump-gdextension-interface",
+        godot_path, "--dump-extension-api", "--dump-gdextension-interface", "--headless",
     });
     const out_path = b.pathJoin(&.{ thisDir(), api_path });
     dump_cmd.setCwd(.{ .cwd_relative = out_path });
