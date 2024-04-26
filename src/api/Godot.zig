@@ -130,29 +130,35 @@ pub fn registerClass(comptime T: type) void {
     getClassName(T).* = StringName.initFromLatin1Chars(getBaseName(@typeName(T)));
 
     const PerClassData = struct {
-        pub var class_info: GDE.GDExtensionClassCreationInfo3 = .{
-            .is_virtual = 0,
-            .is_abstract = 0,
-            .is_exposed = 1,
-            .is_runtime = 0,
-            .set_func = if(@hasDecl(T, "_set")) set_bind else null,
-            .get_func = if(@hasDecl(T, "_get")) get_bind else null,
-            .get_property_list_func = if(@hasDecl(T, "_get_property_list")) get_property_list_bind else null,
-            .free_property_list_func = free_property_list_bind,
-            .property_can_revert_func = if(@hasDecl(T, "_property_can_revert")) property_can_revert_bind else null,
-            .property_get_revert_func = if(@hasDecl(T, "_property_get_revert")) property_get_revert_bind else null,
-            .validate_property_func = if(@hasDecl(T, "_validate_property")) validate_property_bind else null,
-            .notification_func = if (@hasDecl(T, "_notification")) notification_bind else null,
-            .to_string_func = if(@hasDecl(T, "_to_string")) to_string_bind else null,
-            .reference_func = null,
-            .unreference_func = null,
-            .create_instance_func = create_instance_bind, // (Default) constructor; mandatory. If the class is not instantiable, consider making it virtual or abstract.
-            .free_instance_func = free_instance_bind, // Destructor; mandatory.
-            .get_virtual_func = get_virtual_bind, // Queries a virtual function by name and returns a callback to invoke the requested virtual function.
-            .get_virtual_call_data_func = null,
-            .call_virtual_with_data_func = null,
-            .get_rid_func = null,
-            .class_userdata = @ptrCast(getClassName(T)), // Per-class user data, later accessible in instance bindings.
+        pub var class_info = init_blk: {
+            const isGDE3 = @hasDecl(GDE, "GDExtensionClassCreationInfo3");
+            var c: if (isGDE3) GDE.GDExtensionClassCreationInfo3 else GDE.GDExtensionClassCreationInfo2 = .{
+                .is_virtual = 0,
+                .is_abstract = 0,
+                .is_exposed = 1,
+                .set_func = if (@hasDecl(T, "_set")) set_bind else null,
+                .get_func = if (@hasDecl(T, "_get")) get_bind else null,
+                .get_property_list_func = if (@hasDecl(T, "_get_property_list")) get_property_list_bind else null,
+                .free_property_list_func = free_property_list_bind,
+                .property_can_revert_func = if (@hasDecl(T, "_property_can_revert")) property_can_revert_bind else null,
+                .property_get_revert_func = if (@hasDecl(T, "_property_get_revert")) property_get_revert_bind else null,
+                .validate_property_func = if (@hasDecl(T, "_validate_property")) validate_property_bind else null,
+                .notification_func = if (@hasDecl(T, "_notification")) notification_bind else null,
+                .to_string_func = if (@hasDecl(T, "_to_string")) to_string_bind else null,
+                .reference_func = null,
+                .unreference_func = null,
+                .create_instance_func = create_instance_bind, // (Default) constructor; mandatory. If the class is not instantiable, consider making it virtual or abstract.
+                .free_instance_func = free_instance_bind, // Destructor; mandatory.
+                .get_virtual_func = get_virtual_bind, // Queries a virtual function by name and returns a callback to invoke the requested virtual function.
+                .get_virtual_call_data_func = null,
+                .call_virtual_with_data_func = null,
+                .get_rid_func = null,
+                .class_userdata = @ptrCast(getClassName(T)), // Per-class user data, later accessible in instance bindings.
+            };
+            if (isGDE3) {
+                c.is_runtime = 0;
+            }
+            break :init_blk c;
         };
 
         pub fn set_bind(p_instance: GDE.GDExtensionClassInstancePtr, name: GDE.GDExtensionConstStringNamePtr, value: GDE.GDExtensionConstVariantPtr) callconv(.C) GDE.GDExtensionBool {
@@ -265,7 +271,8 @@ pub fn registerClass(comptime T: type) void {
             return T._get_rid(@ptrCast(@alignCast(p_instance)));
         }
     };
-    GD.classdbRegisterExtensionClass3(@ptrCast(GD.p_library), @ptrCast(getClassName(T)), @ptrCast(getParentClassName(T)), @ptrCast(&PerClassData.class_info));
+    const classdbRegisterExtensionClass = if (@hasDecl(GD, "classdbRegisterExtensionClass3")) GD.classdbRegisterExtensionClass3 else GD.classdbRegisterExtensionClass2;
+    classdbRegisterExtensionClass(@ptrCast(GD.p_library), @ptrCast(getClassName(T)), @ptrCast(getParentClassName(T)), @ptrCast(&PerClassData.class_info));
     if(@hasDecl(T, "_bind_methods")){
         T._bind_methods();
     }
