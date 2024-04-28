@@ -1,18 +1,22 @@
 # godot-zig
-Zig bindings for Godot 4
+A WIP Zig bindings for Godot 4.  
+Features are being gradually added to meet the needs of a demo game.  
+Bugs and missing features are expected until a stable version finally released.  
+Issue report, feature request and pull request are all welcome.  
 
 ## Prerequisites:
-1. zig master build
+1. zig 0.12 or higher
 2. godot 4.2 or higher
-3. making sure 'godot' command is available to generate bindings automatically.
 
 ## Building:
 
 ```
 zig build bind                 # generate zig bindings for current godot version
-zig build
-godot -e --path ./project      # -e is only needed for the first run to get assets imported
+zig build -Dprecision=float -Darch=64 -Dgodot=path_to_godot
+godot -e --path ./project      # only needed for the first run, to get assets imported
+zig build run
 ```
+
 
 ## A GDExtension class example:
 ```
