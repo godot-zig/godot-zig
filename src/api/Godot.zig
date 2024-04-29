@@ -131,8 +131,13 @@ pub fn registerClass(comptime T: type) void {
 
     const PerClassData = struct {
         pub var class_info = init_blk: {
-            const isGDE3 = @hasDecl(GDE, "GDExtensionClassCreationInfo3");
-            var c: if (isGDE3) GDE.GDExtensionClassCreationInfo3 else GDE.GDExtensionClassCreationInfo2 = .{
+            const ClassInfo: struct { T: type, version: i8 } = if (@hasDecl(GDE, "GDExtensionClassCreationInfo3"))
+                .{ .T = GDE.GDExtensionClassCreationInfo3, .version = 3 }
+            else if (@hasDecl(GDE, "GDExtensionClassCreationInfo2"))
+                .{ .T = GDE.GDExtensionClassCreationInfo2, .version = 2 }
+            else
+                @compileError("Godot 4.2 or higher is required.");
+            var c: ClassInfo.T = .{
                 .is_virtual = 0,
                 .is_abstract = 0,
                 .is_exposed = 1,
@@ -155,7 +160,7 @@ pub fn registerClass(comptime T: type) void {
                 .get_rid_func = null,
                 .class_userdata = @ptrCast(getClassName(T)), // Per-class user data, later accessible in instance bindings.
             };
-            if (isGDE3) {
+            if (ClassInfo.version >= 3) {
                 c.is_runtime = 0;
             }
             break :init_blk c;
@@ -271,7 +276,12 @@ pub fn registerClass(comptime T: type) void {
             return T._get_rid(@ptrCast(@alignCast(p_instance)));
         }
     };
-    const classdbRegisterExtensionClass = if (@hasDecl(GD, "classdbRegisterExtensionClass3")) GD.classdbRegisterExtensionClass3 else GD.classdbRegisterExtensionClass2;
+    const classdbRegisterExtensionClass = if (@hasDecl(GD, "classdbRegisterExtensionClass3"))
+        GD.classdbRegisterExtensionClass3
+    else if (@hasDecl(GD, "classdbRegisterExtensionClass2"))
+        GD.classdbRegisterExtensionClass2
+    else
+        @compileError("Godot 4.2 or higher is required.");
     classdbRegisterExtensionClass(@ptrCast(GD.p_library), @ptrCast(getClassName(T)), @ptrCast(getParentClassName(T)), @ptrCast(&PerClassData.class_info));
     if(@hasDecl(T, "_bind_methods")){
         T._bind_methods();
