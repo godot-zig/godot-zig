@@ -80,7 +80,3 @@ pub fn generateBindings(b: *std.Build, target: std.Build.ResolvedTarget, precisi
 
     return mod;
 }
-
-inline fn thisDir() []const u8 {
-    return comptime std.fs.path.dirname(@src().file) orelse ".";
-}
