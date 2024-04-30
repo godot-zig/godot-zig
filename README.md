@@ -11,9 +11,8 @@ Issue report, feature request and pull request are all welcome.
 ## Building:
 
 ```
-zig build bind -Dprecision=float -Darch=64 -Dgodot=path_to_godot    # generate zig bindings for current godot version
-zig build -Dprecision=float -Darch=64 -Dgodot=path_to_godot
-godot -e --path ./project                                           # only needed for the first run, to get assets imported
+zig build -Dprecision=float -Dgodot=path_to_godot
+godot -e --path ./project                                 # only needed for the first run, to get assets imported
 zig build run
 ```
 
