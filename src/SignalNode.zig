@@ -1,5 +1,5 @@
 const std = @import("std");
-const Godot = @import("api/Godot.zig");
+const Godot = @import("godot");
 const Self = @This();
 
 pub usingnamespace Godot.Control;
@@ -41,7 +41,7 @@ pub fn _enter_tree(self: *Self) void {
     self.add_child(self.color_rect, false, Godot.Node.INTERNAL_MODE_DISABLED);
     self.color_rect.set_position(.{ 400, 400 }, false);
     self.color_rect.set_size(.{ 100, 100 }, false);
-    self.color_rect.set_color(Godot.Color.initFromF64F64F64F64(1,0,0,1));
+    self.color_rect.set_color(Godot.Color.initFromF64F64F64F64(1, 0, 0, 1));
 
     Godot.connect(signal1_btn, "pressed", self, "emitSignal1");
     Godot.connect(signal2_btn, "pressed", self, "emitSignal2");
@@ -56,22 +56,22 @@ pub fn _exit_tree(self: *Self) void {
     Godot.Engine.releaseSingleton();
 }
 
-pub fn onSignal1(_:*Self, name:Godot.StringName, position:Godot.Vector3) void {
-    var buf:[256]u8 = undefined;
+pub fn onSignal1(_: *Self, name: Godot.StringName, position: Godot.Vector3) void {
+    var buf: [256]u8 = undefined;
     const n = Godot.stringNameToAscii(name, &buf);
-    std.debug.print("sianal1 received : name = {s} position={any}\n", .{n, position});
+    std.debug.print("sianal1 received : name = {s} position={any}\n", .{ n, position });
 }
 
-pub fn onSignal2(self:*Self) void {
-    self.color_rect.set_color(Godot.Color.initFromF64F64F64F64(0,1,0,1));
+pub fn onSignal2(self: *Self) void {
+    self.color_rect.set_color(Godot.Color.initFromF64F64F64F64(0, 1, 0, 1));
 }
 
-pub fn onSignal3(self:*Self) void {
-    self.color_rect.set_color(Godot.Color.initFromF64F64F64F64(1,0,0,1));
+pub fn onSignal3(self: *Self) void {
+    self.color_rect.set_color(Godot.Color.initFromF64F64F64F64(1, 0, 0, 1));
 }
 
 pub fn emitSignal1(self: *Self) void {
-    _ = self.emit_signal("signal1", .{Godot.String.initFromLatin1Chars("test_signal_name"), Godot.Vector3{123,321,333}});
+    _ = self.emit_signal("signal1", .{ Godot.String.initFromLatin1Chars("test_signal_name"), Godot.Vector3{ 123, 321, 333 } });
 }
 pub fn emitSignal2(self: *Self) void {
     _ = self.emit_signal("signal2", .{});

@@ -1,8 +1,8 @@
 const std = @import("std");
 pub const Variant = @import("Variant.zig");
 pub usingnamespace @import("Vector.zig");
-pub const UtilityFunctions = @import("gen/UtilityFunctions.zig");
-const GD = @import("gen/GodotCore.zig");
+pub const UtilityFunctions = @import("gen").UtilityFunctions;
+const GD = @import("gen").GodotCore;
 const GDE = GD.GDE;
 const StringName = GD.StringName;
 const String = GD.String;
@@ -81,7 +81,7 @@ const ELEMENT_OFFSET = if ((SIZE_OFFSET + @sizeOf(u64)) % @alignOf(u64) == 0) (S
 const DATA_OFFSET = if ((ELEMENT_OFFSET + @sizeOf(u64)) % @alignOf(max_align_t) == 0) (ELEMENT_OFFSET + @sizeOf(u64)) else ((ELEMENT_OFFSET + @sizeOf(u64)) + @alignOf(max_align_t) - ((ELEMENT_OFFSET + @sizeOf(u64)) % @alignOf(max_align_t)));
 
 pub fn alloc(size: u32) ?*u8 {
-    if( @import("builtin").mode == .Debug ) {
+    if (@import("builtin").mode == .Debug) {
         const p = @as([*c]u8, @ptrCast(GD.memAlloc(size)));
         return p;
     } else {
@@ -90,8 +90,8 @@ pub fn alloc(size: u32) ?*u8 {
     }
 }
 
-pub fn free(ptr:?*anyopaque) void {
-    if(ptr)|p|{
+pub fn free(ptr: ?*anyopaque) void {
+    if (ptr) |p| {
         GD.memFree(p);
     }
 }
@@ -125,7 +125,7 @@ pub fn registerClass(comptime T: type) void {
     registered_classes.put(@typeName(T), true) catch unreachable;
 
     const P = @typeInfo(std.meta.FieldType(T, .godot_object)).Pointer.child;
-    const parent_class_name:[:0]const u8 = comptime getBaseName(@typeName(P));
+    const parent_class_name: [:0]const u8 = comptime getBaseName(@typeName(P));
     getParentClassName(T).* = StringName.initFromLatin1Chars(parent_class_name);
     getClassName(T).* = StringName.initFromLatin1Chars(getBaseName(@typeName(T)));
 
@@ -167,29 +167,29 @@ pub fn registerClass(comptime T: type) void {
         };
 
         pub fn set_bind(p_instance: GDE.GDExtensionClassInstancePtr, name: GDE.GDExtensionConstStringNamePtr, value: GDE.GDExtensionConstVariantPtr) callconv(.C) GDE.GDExtensionBool {
-            if( p_instance)|p|{
-                return if(T._set(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(name))).*, @as(*Variant, @ptrCast(@constCast(value))).*)) 1 else 0; //fn _set(_: *Self, name: Godot.StringName, _: Godot.Variant) bool
+            if (p_instance) |p| {
+                return if (T._set(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(name))).*, @as(*Variant, @ptrCast(@constCast(value))).*)) 1 else 0; //fn _set(_: *Self, name: Godot.StringName, _: Godot.Variant) bool
             } else {
                 return 0;
             }
         }
 
         pub fn get_bind(p_instance: GDE.GDExtensionClassInstancePtr, name: GDE.GDExtensionConstStringNamePtr, value: GDE.GDExtensionVariantPtr) callconv(.C) GDE.GDExtensionBool {
-            if( p_instance)|p|{
-                return if(T._get(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(name))).*, @as(*Variant, @ptrCast(value)))) 1 else 0; //fn _get(self:*Self, name: StringName, value:*Variant) bool
+            if (p_instance) |p| {
+                return if (T._get(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(name))).*, @as(*Variant, @ptrCast(value)))) 1 else 0; //fn _get(self:*Self, name: StringName, value:*Variant) bool
             } else {
                 return 0;
             }
         }
         pub fn get_property_list_bind(p_instance: GDE.GDExtensionClassInstancePtr, r_count: [*c]u32) callconv(.C) [*c]const GDE.GDExtensionPropertyInfo {
-            if( p_instance)|p|{
-                const ptr:*T = @ptrCast(@alignCast(p));
+            if (p_instance) |p| {
+                const ptr: *T = @ptrCast(@alignCast(p));
                 const property_list = T._get_property_list(ptr);
 
-                const count:u32 = @intCast(property_list.len);
+                const count: u32 = @intCast(property_list.len);
 
                 const propertyies = @as([*c]GDE.GDExtensionPropertyInfo, @ptrCast(@alignCast(alloc(@sizeOf(GDE.GDExtensionPropertyInfo) * count))));
-                for(property_list, 0..) |*property, i| {
+                for (property_list, 0..) |*property, i| {
                     propertyies[i].type = property.type;
                     propertyies[i].hint = property.hint;
                     propertyies[i].usage = property.usage;
@@ -209,43 +209,43 @@ pub fn registerClass(comptime T: type) void {
             }
         }
         pub fn free_property_list_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_list: [*c]const GDE.GDExtensionPropertyInfo) callconv(.C) void {
-            if(@hasDecl(T, "_free_property_list")) {
-                if(p_instance)|p|{ 
+            if (@hasDecl(T, "_free_property_list")) {
+                if (p_instance) |p| {
                     T._free_property_list(@ptrCast(@alignCast(p)), p_list); //fn _free_property_list(self:*Self, p_list:[*c]const GDE.GDExtensionPropertyInfo) void {}
                 }
             }
-            if( p_list ) |list|{
+            if (p_list) |list| {
                 free(@ptrCast(@constCast(list)));
             }
         }
         pub fn property_can_revert_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_name: GDE.GDExtensionConstStringNamePtr) callconv(.C) GDE.GDExtensionBool {
-             if( p_instance)|p|{
-                return if(T._property_can_revert(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(p_name))).*)) 1 else 0;//fn _property_can_revert(self:*Self, name: StringName) bool
+            if (p_instance) |p| {
+                return if (T._property_can_revert(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(p_name))).*)) 1 else 0; //fn _property_can_revert(self:*Self, name: StringName) bool
             } else {
                 return 0;
             }
         }
         pub fn property_get_revert_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_name: GDE.GDExtensionConstStringNamePtr, r_ret: GDE.GDExtensionVariantPtr) callconv(.C) GDE.GDExtensionBool {
-              if( p_instance)|p|{
-                return if(T._property_get_revert(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(p_name))).*, @as(*Variant, @ptrCast(r_ret)))) 1 else 0; //fn _property_get_revert(self:*Self, name: StringName, ret:*Variant) bool
+            if (p_instance) |p| {
+                return if (T._property_get_revert(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(p_name))).*, @as(*Variant, @ptrCast(r_ret)))) 1 else 0; //fn _property_get_revert(self:*Self, name: StringName, ret:*Variant) bool
             } else {
                 return 0;
             }
         }
         pub fn validate_property_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_property: [*c]GDE.GDExtensionPropertyInfo) callconv(.C) GDE.GDExtensionBool {
-            if( p_instance)|p|{
-                return if(T._validate_property(@ptrCast(@alignCast(p)), p_property)) 1 else 0; //fn _validate_property(self:*Self, p_property: [*c]GDE.GDExtensionPropertyInfo) bool
+            if (p_instance) |p| {
+                return if (T._validate_property(@ptrCast(@alignCast(p)), p_property)) 1 else 0; //fn _validate_property(self:*Self, p_property: [*c]GDE.GDExtensionPropertyInfo) bool
             } else {
                 return 0;
             }
         }
         pub fn notification_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_what: i32, _: GDE.GDExtensionBool) callconv(.C) void {
-            if( p_instance)|p|{
+            if (p_instance) |p| {
                 T._notification(@ptrCast(@alignCast(p)), p_what); //fn _notification(self:*Self, what:i32) void
             }
         }
         pub fn to_string_bind(p_instance: GDE.GDExtensionClassInstancePtr, r_is_valid: [*c]GDE.GDExtensionBool, p_out: GDE.GDExtensionStringPtr) callconv(.C) void {
-            if( p_instance)|p|{
+            if (p_instance) |p| {
                 const ret: ?String = T._to_string(@ptrCast(@alignCast(p))); //fn _to_string(self:*Self) ?Godot.String {}
                 if (ret) |r| {
                     r_is_valid.* = 1;
@@ -283,7 +283,7 @@ pub fn registerClass(comptime T: type) void {
     else
         @compileError("Godot 4.2 or higher is required.");
     classdbRegisterExtensionClass(@ptrCast(GD.p_library), @ptrCast(getClassName(T)), @ptrCast(getParentClassName(T)), @ptrCast(&PerClassData.class_info));
-    if(@hasDecl(T, "_bind_methods")){
+    if (@hasDecl(T, "_bind_methods")) {
         T._bind_methods();
     }
 }
@@ -423,18 +423,18 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8) void {
 }
 
 var registered_signals: std.StringHashMap(bool) = undefined;
-pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, arguments:[]const PropertyInfo) void {
+pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, arguments: []const PropertyInfo) void {
     //prevent duplicate registration
     const fullname = std.mem.concat(GD.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", signal_name }) catch unreachable;
     if (registered_signals.contains(fullname)) return;
     registered_signals.put(fullname, true) catch unreachable;
 
-    var propertyies:[32]GDE.GDExtensionPropertyInfo = undefined;
-    if( arguments.len > 32) {
+    var propertyies: [32]GDE.GDExtensionPropertyInfo = undefined;
+    if (arguments.len > 32) {
         std.log.err("why you need so many arguments for a single signal? whatever, you can increase the upper limit as you want", .{});
     }
 
-    for(arguments, 0..) |*a, i| {
+    for (arguments, 0..) |*a, i| {
         propertyies[i].type = a.type;
         propertyies[i].hint = a.hint;
         propertyies[i].usage = a.usage;
@@ -443,7 +443,7 @@ pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, argu
         propertyies[i].hint_string = @ptrCast(@constCast(&a.hint_string));
     }
 
-    if( arguments.len > 0 ) {
+    if (arguments.len > 0) {
         GD.classdbRegisterExtensionClassSignal(GD.p_library, getClassName(T), &StringName.initFromLatin1Chars(signal_name), &propertyies[0], @intCast(arguments.len));
     } else {
         GD.classdbRegisterExtensionClassSignal(GD.p_library, getClassName(T), &StringName.initFromLatin1Chars(signal_name), null, 0);
@@ -493,11 +493,10 @@ pub const PropertyInfo = struct {
     usage: u32 = GD.GlobalEnums.PROPERTY_USAGE_DEFAULT,
     const Self = @This();
 
-    pub fn init(@"type":GDE.GDExtensionVariantType, name:StringName) Self
-    {
+    pub fn init(@"type": GDE.GDExtensionVariantType, name: StringName) Self {
         return .{
             .type = @"type",
-            .name = name, 
+            .name = name,
             .hint_string = String.initFromUtf8Chars("test property"),
             .class_name = StringName.initFromLatin1Chars(""),
             .hint = GD.GlobalEnums.PROPERTY_HINT_NONE,
@@ -505,11 +504,10 @@ pub const PropertyInfo = struct {
         };
     }
 
-    pub fn initFull(@"type":GDE.GDExtensionVariantType, name:StringName, class_name: StringName, hint: u32, hint_string:String, usage:u32) Self
-    {
+    pub fn initFull(@"type": GDE.GDExtensionVariantType, name: StringName, class_name: StringName, hint: u32, hint_string: String, usage: u32) Self {
         return .{
             .type = @"type",
-            .name = name, 
+            .name = name,
             .class_name = class_name,
             .hint_string = hint_string,
             .hint = hint,

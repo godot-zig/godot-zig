@@ -1,7 +1,7 @@
 const math = @import("std").math;
 
 const precision = @import("build_options").precision;
-const real_t = if(@import("std").mem.eql(u8, precision, "double")) f64 else f32;
+const real_t = if (@import("std").mem.eql(u8, precision, "double")) f64 else f32;
 
 pub const Vector2 = @Vector(2, real_t);
 pub const Vector2i = @Vector(2, i32);

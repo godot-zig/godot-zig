@@ -1,5 +1,5 @@
 const std = @import("std");
-const Godot = @import("api/Godot.zig");
+const Godot = @import("godot");
 const Vector2 = Godot.Vector2;
 const SpritesNode = @import("SpriteNode.zig");
 const GuiNode = @import("GuiNode.zig");
@@ -17,8 +17,8 @@ godot_object: *Godot.Node,
 panel: *Godot.PanelContainer = undefined,
 example_node: ?Godot.Node = null,
 
-property1:Godot.Vector3 = Godot.Vector3{42,42,42},
-property2:Godot.Vector3 = Godot.Vector3{24,24,24},
+property1: Godot.Vector3 = Godot.Vector3{ 42, 42, 42 },
+property2: Godot.Vector3 = Godot.Vector3{ 24, 24, 24 },
 
 const property1_name: [:0]const u8 = "Property1";
 const property2_name: [:0]const u8 = "Property2";
@@ -52,14 +52,14 @@ pub fn on_item_focused(self: *Self, idx: i64) void {
 }
 
 pub fn _enter_tree(self: *Self) void {
-    inline for(Examples) |E| {
+    inline for (Examples) |E| {
         Godot.registerClass(E.T);
     }
-    
+
     //initialize fields
     self.example_node = null;
-    self.property1 = Godot.Vector3{111,111,111};
-    self.property2 = Godot.Vector3{222,222,222};
+    self.property1 = Godot.Vector3{ 111, 111, 111 };
+    self.property2 = Godot.Vector3{ 222, 222, 222 };
 
     if (Godot.Engine.getSingleton().is_editor_hint()) return;
 
@@ -104,33 +104,30 @@ pub fn _notification(self: *Self, what: i32) void {
 
 pub fn _get_property_list(_: *Self) []const Godot.PropertyInfo {
     const C = struct {
-        var properties:[32]Godot.PropertyInfo = undefined;
+        var properties: [32]Godot.PropertyInfo = undefined;
     };
 
-    C.properties[0] = Godot.PropertyInfo.init(Godot.GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3,Godot.StringName.initFromLatin1Chars(property1_name));
-    C.properties[1] = Godot.PropertyInfo.init(Godot.GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3,Godot.StringName.initFromLatin1Chars(property2_name));
-    
+    C.properties[0] = Godot.PropertyInfo.init(Godot.GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3, Godot.StringName.initFromLatin1Chars(property1_name));
+    C.properties[1] = Godot.PropertyInfo.init(Godot.GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3, Godot.StringName.initFromLatin1Chars(property2_name));
+
     return C.properties[0..2];
 }
 
-pub fn _property_can_revert(_:*Self, name: Godot.StringName) bool {
+pub fn _property_can_revert(_: *Self, name: Godot.StringName) bool {
     if (name.casecmp_to(property1_name) == 0) {
         return true;
-    }
-    else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmp_to(property2_name) == 0) {
         return true;
     }
 
     return false;
 }
 
-pub fn _property_get_revert(_:*Self, name: Godot.StringName, value:*Godot.Variant) bool
-{
+pub fn _property_get_revert(_: *Self, name: Godot.StringName, value: *Godot.Variant) bool {
     if (name.casecmp_to(property1_name) == 0) {
         value.* = Godot.Variant.initFrom(Godot.Vector3{ 42, 42, 42 });
         return true;
-    }
-    else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmp_to(property2_name) == 0) {
         value.* = Godot.Variant.initFrom(Godot.Vector3{ 24, 24, 24 });
         return true;
     }
@@ -142,8 +139,7 @@ pub fn _set(self: *Self, name: Godot.StringName, value: Godot.Variant) bool {
     if (name.casecmp_to(property1_name) == 0) {
         self.property1 = value.as(Godot.Vector3);
         return true;
-    }
-    else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmp_to(property2_name) == 0) {
         self.property2 = value.as(Godot.Vector3);
         return true;
     }
@@ -155,8 +151,7 @@ pub fn _get(self: *Self, name: Godot.StringName, value: *Godot.Variant) bool {
     if (name.casecmp_to(property1_name) == 0) {
         value.* = Godot.Variant.initFrom(self.property1);
         return true;
-    }
-    else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmp_to(property2_name) == 0) {
         value.* = Godot.Variant.initFrom(self.property2);
         return true;
     }

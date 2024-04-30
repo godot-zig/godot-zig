@@ -1,5 +1,5 @@
 const std = @import("std");
-const Godot = @import("api/Godot.zig");
+const Godot = @import("godot");
 const GDE = Godot.GDE;
 const builtin = @import("builtin");
 const GPA = std.heap.GeneralPurposeAllocator(.{});

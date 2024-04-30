@@ -1,5 +1,5 @@
 const std = @import("std");
-const Godot = @import("api/Godot.zig");
+const Godot = @import("godot");
 const Self = @This();
 
 pub usingnamespace Godot.Control;
