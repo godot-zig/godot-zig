@@ -73,7 +73,7 @@ fn parseSingletons(api: anytype) !void {
     }
 }
 
-fn isStringType(type_name:string) bool {
+fn isStringType(type_name: string) bool {
     return mem.eql(u8, type_name, "String") or mem.eql(u8, type_name, "StringName");
 }
 
@@ -346,7 +346,7 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             }
         }
 
-        if(is_vararg) {
+        if (is_vararg) {
             if (!is_first_arg) {
                 _ = try code_builder.writer.write(", ");
             }
@@ -369,29 +369,28 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
 
     var arg_array: string = "null";
     var arg_count: string = "0";
- 
-    if( is_vararg) {
+
+    if (is_vararg) {
         try code_builder.writeLine(1, "const fields = @import(\"std\").meta.fields(@TypeOf(varargs));");
-        try code_builder.printLine(1, "var args:[fields.len + {d}]*const Godot.Variant = undefined;", .{args.items.len-1});
-        for (0..args.items.len-1)|i| {
-            if( isStringType(arg_types.items[i])) {
-                try code_builder.printLine(1, "args[{d}] = &Godot.Variant.initFrom(Godot.String.initFromLatin1Chars({s}));", .{i, args.items[i]});            
+        try code_builder.printLine(1, "var args:[fields.len + {d}]*const Godot.Variant = undefined;", .{args.items.len - 1});
+        for (0..args.items.len - 1) |i| {
+            if (isStringType(arg_types.items[i])) {
+                try code_builder.printLine(1, "args[{d}] = &Godot.Variant.initFrom(Godot.String.initFromLatin1Chars({s}));", .{ i, args.items[i] });
             } else {
-                 try code_builder.printLine(1, "args[{d}] = &Godot.Variant.initFrom({s});", .{i, args.items[i]});                           
+                try code_builder.printLine(1, "args[{d}] = &Godot.Variant.initFrom({s});", .{ i, args.items[i] });
             }
         }
         try code_builder.writeLine(1, "inline for(fields, 0..)|f, i|{");
-        try code_builder.printLine(2, "args[{d}+i] = &Godot.Variant.initFrom(@field(varargs, f.name));", .{args.items.len-1});
-        try code_builder.writeLine(1, "}");        
-    }
-    else if (args.items.len > 0) {
+        try code_builder.printLine(2, "args[{d}+i] = &Godot.Variant.initFrom(@field(varargs, f.name));", .{args.items.len - 1});
+        try code_builder.writeLine(1, "}");
+    } else if (args.items.len > 0) {
         try code_builder.printLine(1, "var args:[{d}]GDE.GDExtensionConstTypePtr = undefined;", .{args.items.len});
         for (0..args.items.len) |i| {
             if (isEngineClass(arg_types.items[i])) {
                 try code_builder.printLine(1, "if(@typeInfo(@TypeOf({1s})) == .Pointer) {{ args[{0d}] = @ptrCast(&({1s}.godot_object)); }}", .{ i, args.items[i] });
                 try code_builder.printLine(1, "else if({1s} == null) {{ args[{0d}] = null; }} else {{ args[{0d}] = @ptrCast(&({1s}.?.godot_object)); }}", .{ i, args.items[i] });
             } else {
-                if ((proc_type != .Constructor or !isStringType(class_name)) and (isStringType(arg_types.items[i]))){
+                if ((proc_type != .Constructor or !isStringType(class_name)) and (isStringType(arg_types.items[i]))) {
                     try code_builder.printLine(1, "args[{d}] = @ptrCast(&{s}.initFromLatin1Chars({s}));", .{ i, arg_types.items[i], args.items[i] });
                 } else {
                     try code_builder.printLine(1, "args[{d}] = @ptrCast(&{s});", .{ i, args.items[i] });
@@ -420,14 +419,14 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             try code_builder.printLine(2, "const func_name = StringName.initFromLatin1Chars(\"{s}\");", .{func_name});
             try code_builder.printLine(2, "Binding.method = Godot.classdbGetMethodBind(@ptrCast(Godot.getClassName({s})), @ptrCast(&func_name), {d});", .{ class_name, fn_node.hash });
             try code_builder.writeLine(1, "}");
-            if( is_vararg) {
+            if (is_vararg) {
                 try code_builder.writeLine(1, "var err:GDE.GDExtensionCallError = undefined;");
-	            try code_builder.writeLine(1, "var ret:Variant = Variant.init();");
+                try code_builder.writeLine(1, "var ret:Variant = Variant.init();");
                 try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(self.godot_object), @ptrCast(@alignCast(&args[0])), args.len, &ret, &err);");
-                if( need_return) {
+                if (need_return) {
                     try code_builder.printLine(1, "result = ret.as({s});", .{return_type});
                 }
-            }else {
+            } else {
                 try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(self.godot_object), {s}, {s});", .{ arg_array, result_string });
                 if (isEngineClass(return_type)) {
                     try code_builder.writeLine(1, "result = @ptrCast(@alignCast(Godot.getObjectInstanceBinding(@ptrCast(result))));");
@@ -871,8 +870,8 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
     try code_builder.writeLine(0, "});");
 
     for (all_classes.items) |cls| {
-        if( mem.eql(u8, cls, "GlobalEnums")) {
-            try code_builder.printLine(0, "pub const {0s} = @import(\"{0s}.zig\");", .{cls});           
+        if (mem.eql(u8, cls, "GlobalEnums")) {
+            try code_builder.printLine(0, "pub const {0s} = @import(\"{0s}.zig\");", .{cls});
         } else {
             try code_builder.printLine(0, "pub const {0s} = @import(\"{0s}.zig\").{0s};", .{cls});
         }
@@ -985,7 +984,7 @@ pub fn main() !void {
     try cwd.deleteTree(outpath);
     try cwd.makePath(outpath);
 
-    const conf = try temp_buf.bufPrint("{s}_{s}", .{args[2], args[3]});
+    const conf = try temp_buf.bufPrint("{s}_{s}", .{ args[2], args[3] });
     try parseClassSizes(api, conf);
     try parseSingletons(api);
     try generateGlobalEnums(api, allocator);
@@ -995,5 +994,5 @@ pub fn main() !void {
 
     try generateGodotCore(allocator);
 
-    std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{conf, api.value.header.version_full_name});
+    std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{ conf, api.value.header.version_full_name });
 }

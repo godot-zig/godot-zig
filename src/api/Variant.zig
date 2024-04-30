@@ -4,7 +4,7 @@ const GDE = Godot.GDE;
 const Self = @This();
 const Variant = Godot.Variant;
 const precision = @import("build_options").precision;
-const size = if(std.mem.eql(u8, precision, "double")) 40 else 24;
+const size = if (std.mem.eql(u8, precision, "double")) 40 else 24;
 
 value: [size]u8,
 
@@ -126,9 +126,9 @@ fn getByGodotType(comptime T: type) Type {
     };
 }
 
-fn getChildTypeOrSelf(comptime T:type) type {
+fn getChildTypeOrSelf(comptime T: type) type {
     const typeInfo = @typeInfo(T);
-    return switch( typeInfo ) {
+    return switch (typeInfo) {
         .Pointer => |info| info.child,
         .Optional => |info| info.child,
         else => T,
@@ -136,12 +136,12 @@ fn getChildTypeOrSelf(comptime T:type) type {
 }
 pub fn getVariantType(comptime T: type) Type {
     const typeInfo = @typeInfo(T);
-    if( typeInfo == .Pointer and @typeInfo(typeInfo.Pointer.child) != .Struct) {
+    if (typeInfo == .Pointer and @typeInfo(typeInfo.Pointer.child) != .Struct) {
         @compileError("Init Variant from " ++ @typeName(T) ++ " is not supported");
     }
     const RT = getChildTypeOrSelf(T);
 
-    const ret = comptime getByGodotType(RT); 
+    const ret = comptime getByGodotType(RT);
     if (ret == GDE.GDEXTENSION_VARIANT_TYPE_NIL) {
         const ret1 = switch (@typeInfo(RT)) {
             .Struct => GDE.GDEXTENSION_VARIANT_TYPE_OBJECT,
