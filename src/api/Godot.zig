@@ -1,8 +1,8 @@
 const std = @import("std");
 pub const Variant = @import("Variant.zig");
 pub usingnamespace @import("Vector.zig");
-pub const UtilityFunctions = @import("gen/UtilityFunctions.zig");
-const GD = @import("gen/GodotCore.zig");
+pub const UtilityFunctions = @import("gen").UtilityFunctions;
+const GD = @import("gen").GodotCore;
 const GDE = GD.GDE;
 const StringName = GD.StringName;
 const String = GD.String;

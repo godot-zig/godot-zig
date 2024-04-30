@@ -676,7 +676,7 @@ fn addImports(class_name: []const u8, code_builder: anytype, allocator: std.mem.
     try imported_class_map.put("String", true);
     try imported_class_map.put("StringName", true);
 
-    try imp_builder.writeLine(0, "const Godot = @import(\"../Godot.zig\");");
+    try imp_builder.writeLine(0, "const Godot = @import(\"godot\");");
     try imp_builder.writeLine(0, "const GDE = Godot.GDE;");
 
     if (!mem.eql(u8, class_name, "String")) {
@@ -864,7 +864,7 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
     defer loader_builder.deinit();
 
     try code_builder.writeLine(0, "const std = @import(\"std\");");
-    try code_builder.writeLine(0, "const Godot = @import(\"../Godot.zig\");");
+    try code_builder.writeLine(0, "const Godot = @import(\"godot\");");
     try code_builder.writeLine(0, "pub const GDE = @cImport({");
     try code_builder.writeLine(1, "@cInclude(\"gdextension_interface.h\");");
     try code_builder.writeLine(0, "});");
@@ -949,11 +949,10 @@ pub fn main() !void {
     defer std.process.argsFree(allocator, args);
 
     if (args.len < 4) {
-        std.debug.print("Usage: binding_generator outpath precision arch\n", .{});
+        std.debug.print("Usage: binding_generator EXTENSION_API_JSON_PATH CONF_NAME OUT_ENTRYPOINT_PATH\n", .{});
         return;
     }
-    outpath = try std.fs.path.join(allocator, &.{ args[1], "gen" });
-    defer allocator.free(outpath);
+    outpath = std.fs.path.dirname(args[3]).?;
 
     class_size_map = StringSizeMap.init(allocator);
     defer class_size_map.deinit();
@@ -972,10 +971,7 @@ pub fn main() !void {
 
     cwd = std.fs.cwd();
 
-    const fname = try std.fs.path.join(allocator, &.{ args[1], "extension_api.json" });
-    defer allocator.free(fname);
-
-    const contents = try cwd.readFileAlloc(allocator, fname, 10 * 1024 * 1024); //"./src/api/extension_api.json", 10 * 1024 * 1024);
+    const contents = try cwd.readFileAlloc(allocator, args[1], 10 * 1024 * 1024);
     defer allocator.free(contents);
 
     var api = try std.json.parseFromSlice(GdExtensionApi, allocator, contents, .{ .ignore_unknown_fields = false });
@@ -984,8 +980,7 @@ pub fn main() !void {
     try cwd.deleteTree(outpath);
     try cwd.makePath(outpath);
 
-    const conf = try temp_buf.bufPrint("{s}_{s}", .{ args[2], args[3] });
-    try parseClassSizes(api, conf);
+    try parseClassSizes(api, args[2]);
     try parseSingletons(api);
     try generateGlobalEnums(api, allocator);
     try generateUtilityFunctions(api, allocator);
@@ -994,5 +989,11 @@ pub fn main() !void {
 
     try generateGodotCore(allocator);
 
-    std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{ conf, api.value.header.version_full_name });
+    // Generate entrypoint file
+    try cwd.writeFile(args[3],
+        \\pub const UtilityFunctions = @import("UtilityFunctions.zig");
+        \\pub const GodotCore = @import("GodotCore.zig");
+    );
+
+    std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{ args[2], api.value.header.version_full_name });
 }

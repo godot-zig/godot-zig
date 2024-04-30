@@ -1,5 +1,5 @@
 const std = @import("std");
-const Godot = @import("api/Godot.zig");
+const Godot = @import("godot");
 const Vector2 = Godot.Vector2;
 const Sprite = struct {
     pos: Godot.Vector2,
