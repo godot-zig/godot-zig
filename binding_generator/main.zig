@@ -36,14 +36,14 @@ pub fn camelCaseToSnake(in: []const u8, buf: []u8) []const u8 {
     var prev_is_lower_case: bool = true;
     for (in, 0..) |c, i| {
         if (std.ascii.isUpper(c)) {
-            if (i > 0 and prev_is_lower_case) {
+            if (i > 0 and prev_is_lower_case and
+                !(c == 'D' and std.mem.indexOfScalar(u8, "234", in[i - 1]) != null))
+            {
                 buf[j] = '_';
-                buf[j + 1] = std.ascii.toLower(c);
-                j += 2;
-            } else {
-                buf[j] = std.ascii.toLower(c);
                 j += 1;
             }
+            buf[j] = std.ascii.toLower(c);
+            j += 1;
             prev_is_lower_case = false;
         } else {
             prev_is_lower_case = true;
