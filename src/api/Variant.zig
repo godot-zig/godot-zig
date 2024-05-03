@@ -169,7 +169,10 @@ pub fn initFrom(from: anytype) Self {
     from_type[@intCast(tid)].?(@ptrCast(&result), @ptrCast(@constCast(&from)));
     return result;
 }
-pub fn as(self: Self, comptime T: type) T {
+pub fn as(self_const: Self, comptime T: type) T {
+    // Godot wants a mutable pointer. I don't think it actually needs one, but just to be safe we'll copy.
+    var self = self_const;
+
     const tid = comptime getVariantType(T);
     if (tid == C.GDEXTENSION_VARIANT_TYPE_OBJECT) {
         var obj: ?*anyopaque = null;
