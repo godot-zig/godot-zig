@@ -144,7 +144,6 @@ pub fn registerClass(comptime T: type) void {
                 .set_func = if (@hasDecl(T, "_set")) set_bind else null,
                 .get_func = if (@hasDecl(T, "_get")) get_bind else null,
                 .get_property_list_func = if (@hasDecl(T, "_get_property_list")) get_property_list_bind else null,
-                .free_property_list_func = free_property_list_bind,
                 .property_can_revert_func = if (@hasDecl(T, "_property_can_revert")) property_can_revert_bind else null,
                 .property_get_revert_func = if (@hasDecl(T, "_property_get_revert")) property_get_revert_bind else null,
                 .validate_property_func = if (@hasDecl(T, "_validate_property")) validate_property_bind else null,
@@ -162,6 +161,14 @@ pub fn registerClass(comptime T: type) void {
             };
             if (ClassInfo.version >= 3) {
                 c.is_runtime = 0;
+            }
+            const t = @TypeOf(c.free_property_list_func);
+            if (t == GDE.GDExtensionClassFreePropertyList) {
+                c.free_property_list_func = free_property_list_bind;
+            } else if (t == GDE.GDExtensionClassFreePropertyList2) {
+                c.free_property_list_func = free_property_list_bind2;
+            } else {
+                @compileError(".free_property_list_func is an unknown type.");
             }
             break :init_blk c;
         };
@@ -212,6 +219,16 @@ pub fn registerClass(comptime T: type) void {
             if (@hasDecl(T, "_free_property_list")) {
                 if (p_instance) |p| {
                     T._free_property_list(@ptrCast(@alignCast(p)), p_list); //fn _free_property_list(self:*Self, p_list:[*c]const GDE.GDExtensionPropertyInfo) void {}
+                }
+            }
+            if (p_list) |list| {
+                free(@ptrCast(@constCast(list)));
+            }
+        }
+        pub fn free_property_list_bind2(p_instance: GDE.GDExtensionClassInstancePtr, p_list: [*c]const GDE.GDExtensionPropertyInfo, p_count: u32) callconv(.C) void {
+            if (@hasDecl(T, "_free_property_list")) {
+                if (p_instance) |p| {
+                    T._free_property_list(@ptrCast(@alignCast(p)), p_list, p_count); //fn _free_property_list(self:*Self, p_list:[*c]const GDE.GDExtensionPropertyInfo, p_count:u32) void {}
                 }
             }
             if (p_list) |list| {
