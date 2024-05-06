@@ -356,7 +356,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
                 if (ReturnType == void or ReturnType == null) {
                     @call(.auto, method, .{});
                 } else {
-                    @as(*Variant, @ptrCast(p_return)).* = @call(.auto, method, .{});
+                    @as(*Variant, @ptrCast(p_return)).* = Variant.initFrom(@call(.auto, method, .{}));
                 }
             } else {
                 var variants: [ArgCount - 1]Variant = undefined;
@@ -372,7 +372,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
                 if (ReturnType == void or ReturnType == null) {
                     @call(.auto, method, args);
                 } else {
-                    @as(*Variant, @ptrCast(p_return)).* = @call(.auto, method, args);
+                    @as(*Variant, @ptrCast(p_return)).* = Variant.initFrom(@call(.auto, method, args));
                 }
             }
         }
@@ -451,7 +451,7 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8) void {
             .usage = Core.GlobalEnums.PROPERTY_USAGE_NONE,
         };
 
-        MethodBinder.arg_metadata[i + 1] = Core.C.GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
+        MethodBinder.arg_metadata[i] = Core.C.GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
     }
 
     MethodBinder.method_info = Core.C.GDExtensionClassMethodInfo{
