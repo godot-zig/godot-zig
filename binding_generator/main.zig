@@ -477,29 +477,29 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
     const class_name = correctName(class_node.name);
 
     const string_class_extra_constructors_code =
-        \\pub fn initFromLatin1Chars(chars:[:0]const u8) Self{
+        \\pub fn initFromLatin1Chars(chars:[]const u8) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNewWithLatin1Chars(@ptrCast(&self.value), chars);
+        \\    Godot.stringNewWithLatin1CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
-        \\pub fn initFromUtf8Chars(chars:[:0]const u8) Self{
+        \\pub fn initFromUtf8Chars(chars:[]const u8) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNewWithUtf8Chars(@ptrCast(&self.value), chars);
+        \\    Godot.stringNewWithUtf8CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
-        \\pub fn initFromUtf16Chars(chars:[:0]const C.char16_t) Self{
+        \\pub fn initFromUtf16Chars(chars:[]const GDE.char16_t) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNewWithUtf16Chars(@ptrCast(&self.value), chars);
+        \\    Godot.stringNewWithUtf16CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
-        \\pub fn initFromUtf32Chars(chars:[:0]const C.char32_t) Self{
+        \\pub fn initFromUtf32Chars(chars:[]const GDE.char32_t) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNewWithUtf32Chars(@ptrCast(&self.value), chars);
+        \\    Godot.stringNewWithUtf32CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
-        \\pub fn initFromWideChars(chars:[:0]const C.wchar_t) Self{
+        \\pub fn initFromWideChars(chars:[]const GDE.wchar_t) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNewWithWideChars(@ptrCast(&self.value), chars);
+        \\    Godot.stringNewWithWideCharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
     ;
@@ -507,22 +507,17 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
     const string_name_class_extra_constructors_code =
         \\pub fn initStaticFromLatin1Chars(chars:[:0]const u8) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNameNewWithLatin1Chars(@ptrCast(&self.value), chars, 1);
+        \\    Godot.stringNameNewWithLatin1Chars(@ptrCast(&self.value), chars.ptr, 1);
         \\    return self;
         \\}
         \\pub fn initFromLatin1Chars(chars:[:0]const u8) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNameNewWithLatin1Chars(@ptrCast(&self.value), chars, 0);
+        \\    Godot.stringNameNewWithLatin1Chars(@ptrCast(&self.value), chars.ptr, 0);
         \\    return self;
         \\}
-        \\pub fn initFromUtf8Chars(chars:[:0]const u8) Self{
+        \\pub fn initFromUtf8Chars(chars:[]const u8) Self{
         \\    var self: Self = undefined;
-        \\    Godot.stringNameNewWithUtf8Chars(@ptrCast(&self.value), chars);
-        \\    return self;
-        \\}
-        \\pub fn initFromUtf8CharsAndLen(chars:[:0]const u8, len:i32) Self{
-        \\    var self: Self = undefined;
-        \\    Godot.stringNameNewWithUtf8CharsAndLen(@ptrCast(&self.value), chars, len);
+        \\    Godot.stringNameNewWithUtf8CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
     ;
