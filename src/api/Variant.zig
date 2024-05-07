@@ -149,10 +149,7 @@ pub fn getVariantType(comptime T: type) Type {
             .Int, .ComptimeInt => GDE.GDEXTENSION_VARIANT_TYPE_INT,
             .Float, .ComptimeFloat => GDE.GDEXTENSION_VARIANT_TYPE_FLOAT,
             .Void => GDE.GDEXTENSION_VARIANT_TYPE_NIL,
-            else => {
-                @compileLog("Unknown variant type " ++ @typeName(T) ++ " " ++ @tagName(typeInfo) ++ " RT:" ++ @typeName(RT));
-                return GDE.GDEXTENSION_VARIANT_TYPE_NIL;
-            },
+            else => @compileError("Cannot construct variant from " ++ @typeName(T)),
         };
         return ret1;
     }
