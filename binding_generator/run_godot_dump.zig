@@ -11,7 +11,6 @@ pub fn main() !void {
         return error.NotEnoughArgs;
     }
 
-    std.log.debug("{s}", .{argv});
     _ = try std.ChildProcess.run(.{
         .allocator = arena.allocator(),
         .argv = argv[2..],

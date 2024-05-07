@@ -995,6 +995,4 @@ pub fn main() !void {
         \\pub const UtilityFunctions = @import("UtilityFunctions.zig");
         \\pub const GodotCore = @import("GodotCore.zig");
     );
-
-    std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{ args[2], api.value.header.version_full_name });
 }
