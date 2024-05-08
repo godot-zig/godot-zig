@@ -389,6 +389,9 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
         try code_builder.writeLine(1, "inline for(fields, 0..)|f, i|{");
         try code_builder.printLine(2, "args[{d}+i] = &Godot.Variant.initFrom(@field(varargs, f.name));", .{args.items.len - 1});
         try code_builder.writeLine(1, "}");
+
+        arg_array = "@ptrCast(&args)";
+        arg_count = "args.len";
     } else if (args.items.len > 0) {
         try code_builder.printLine(1, "var args:[{d}]C.GDExtensionConstTypePtr = undefined;", .{args.items.len});
         for (0..args.items.len) |i| {
@@ -403,7 +406,7 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
                 }
             }
         }
-        arg_array = "&args[0]";
+        arg_array = "@ptrCast(&args)";
         arg_count = "args.len";
     }
 
