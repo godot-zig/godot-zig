@@ -160,6 +160,7 @@ pub fn init() Self {
     return result;
 }
 pub fn initFrom(from: anytype) Self {
+    if (@TypeOf(from) == Self) return from;
     const tid = comptime getVariantType(@TypeOf(from));
     var result: Self = undefined;
     from_type[@intCast(tid)].?(@ptrCast(&result), @ptrCast(@constCast(&from)));
