@@ -52,7 +52,13 @@ pub fn camelCaseToSnake(in: []const u8, buf: []u8) []const u8 {
         }
     }
 
-    return buf[0..j];
+    //handle special cases: 2_D(3_D) should be 2D(3D)
+    if (std.mem.endsWith(u8, buf[0..j], "_d")) {
+        buf[j - 2] = 'D';
+        return buf[0 .. j - 1];
+    } else {
+        return buf[0..j];
+    }
 }
 
 fn parseClassSizes(api: anytype, conf_name: string) !void {
