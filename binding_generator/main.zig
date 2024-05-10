@@ -490,17 +490,17 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
         \\    Godot.stringNewWithUtf8CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
-        \\pub fn initFromUtf16Chars(chars:[]const GDE.char16_t) Self{
+        \\pub fn initFromUtf16Chars(chars:[]const C.char16_t) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithUtf16CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
-        \\pub fn initFromUtf32Chars(chars:[]const GDE.char32_t) Self{
+        \\pub fn initFromUtf32Chars(chars:[]const C.char32_t) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithUtf32CharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;
         \\}
-        \\pub fn initFromWideChars(chars:[]const GDE.wchar_t) Self{
+        \\pub fn initFromWideChars(chars:[]const C.wchar_t) Self{
         \\    var self: Self = undefined;
         \\    Godot.stringNewWithWideCharsAndLen(@ptrCast(&self.value), chars.ptr, @intCast(chars.len));
         \\    return self;

@@ -1,5 +1,5 @@
 const std = @import("std");
-const Godot = @import("godot");
+const Godot = @import("Godot.zig");
 const Self = @This();
 const Variant = Godot.Variant;
 const precision = @import("build_options").precision;
