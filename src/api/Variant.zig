@@ -1,6 +1,6 @@
 const std = @import("std");
 const Godot = @import("Godot.zig");
-const GDE = Godot.GDE;
+const C = Godot.C;
 const Self = @This();
 const Variant = Godot.Variant;
 const precision = @import("build_options").precision;
@@ -75,8 +75,8 @@ const OP_XOR: c_int = 22;
 const OP_NOT: c_int = 23;
 const OP_IN: c_int = 24;
 const OP_MAX: c_int = 25;
-var from_type: [@as(usize, GDE.GDEXTENSION_VARIANT_TYPE_VARIANT_MAX)]GDE.GDExtensionVariantFromTypeConstructorFunc = undefined;
-var to_type: [@as(usize, GDE.GDEXTENSION_VARIANT_TYPE_VARIANT_MAX)]GDE.GDExtensionTypeFromVariantConstructorFunc = undefined;
+var from_type: [@as(usize, C.GDEXTENSION_VARIANT_TYPE_VARIANT_MAX)]C.GDExtensionVariantFromTypeConstructorFunc = undefined;
+var to_type: [@as(usize, C.GDEXTENSION_VARIANT_TYPE_VARIANT_MAX)]C.GDExtensionTypeFromVariantConstructorFunc = undefined;
 pub fn initBindings() void {
     for (1..TYPE_MAX) |i| {
         from_type[i] = Godot.getVariantFromTypeConstructor(@intCast(i));
@@ -86,43 +86,43 @@ pub fn initBindings() void {
 
 fn getByGodotType(comptime T: type) Type {
     return switch (T) {
-        Godot.String => GDE.GDEXTENSION_VARIANT_TYPE_STRING,
-        Godot.Vector2 => GDE.GDEXTENSION_VARIANT_TYPE_VECTOR2,
-        Godot.Vector2i => GDE.GDEXTENSION_VARIANT_TYPE_VECTOR2I,
-        Godot.Rect2 => GDE.GDEXTENSION_VARIANT_TYPE_RECT2,
-        Godot.Rect2i => GDE.GDEXTENSION_VARIANT_TYPE_RECT2I,
-        Godot.Vector3 => GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3,
-        Godot.Vector3i => GDE.GDEXTENSION_VARIANT_TYPE_VECTOR3I,
-        Godot.Transform2D => GDE.GDEXTENSION_VARIANT_TYPE_TRANSFORM2D,
-        Godot.Vector4 => GDE.GDEXTENSION_VARIANT_TYPE_VECTOR4,
-        Godot.Vector4i => GDE.GDEXTENSION_VARIANT_TYPE_VECTOR4I,
-        Godot.Plane => GDE.GDEXTENSION_VARIANT_TYPE_PLANE,
-        Godot.Quaternion => GDE.GDEXTENSION_VARIANT_TYPE_QUATERNION,
-        Godot.AABB => GDE.GDEXTENSION_VARIANT_TYPE_AABB,
-        Godot.Basis => GDE.GDEXTENSION_VARIANT_TYPE_BASIS,
-        Godot.Transform3D => GDE.GDEXTENSION_VARIANT_TYPE_TRANSFORM3D,
-        Godot.Projection => GDE.GDEXTENSION_VARIANT_TYPE_PROJECTION,
+        Godot.String => C.GDEXTENSION_VARIANT_TYPE_STRING,
+        Godot.Vector2 => C.GDEXTENSION_VARIANT_TYPE_VECTOR2,
+        Godot.Vector2i => C.GDEXTENSION_VARIANT_TYPE_VECTOR2I,
+        Godot.Rect2 => C.GDEXTENSION_VARIANT_TYPE_RECT2,
+        Godot.Rect2i => C.GDEXTENSION_VARIANT_TYPE_RECT2I,
+        Godot.Vector3 => C.GDEXTENSION_VARIANT_TYPE_VECTOR3,
+        Godot.Vector3i => C.GDEXTENSION_VARIANT_TYPE_VECTOR3I,
+        Godot.Transform2D => C.GDEXTENSION_VARIANT_TYPE_TRANSFORM2D,
+        Godot.Vector4 => C.GDEXTENSION_VARIANT_TYPE_VECTOR4,
+        Godot.Vector4i => C.GDEXTENSION_VARIANT_TYPE_VECTOR4I,
+        Godot.Plane => C.GDEXTENSION_VARIANT_TYPE_PLANE,
+        Godot.Quaternion => C.GDEXTENSION_VARIANT_TYPE_QUATERNION,
+        Godot.AABB => C.GDEXTENSION_VARIANT_TYPE_AABB,
+        Godot.Basis => C.GDEXTENSION_VARIANT_TYPE_BASIS,
+        Godot.Transform3D => C.GDEXTENSION_VARIANT_TYPE_TRANSFORM3D,
+        Godot.Projection => C.GDEXTENSION_VARIANT_TYPE_PROJECTION,
 
-        Godot.Color => GDE.GDEXTENSION_VARIANT_TYPE_COLOR,
-        Godot.StringName => GDE.GDEXTENSION_VARIANT_TYPE_STRING_NAME,
-        Godot.NodePath => GDE.GDEXTENSION_VARIANT_TYPE_NODE_PATH,
-        Godot.RID => GDE.GDEXTENSION_VARIANT_TYPE_RID,
-        Godot.Object => GDE.GDEXTENSION_VARIANT_TYPE_OBJECT,
-        Godot.Callable => GDE.GDEXTENSION_VARIANT_TYPE_CALLABLE,
-        Godot.Signal => GDE.GDEXTENSION_VARIANT_TYPE_SIGNAL,
-        Godot.Dictionary => GDE.GDEXTENSION_VARIANT_TYPE_DICTIONARY,
-        Godot.Array => GDE.GDEXTENSION_VARIANT_TYPE_ARRAY,
+        Godot.Color => C.GDEXTENSION_VARIANT_TYPE_COLOR,
+        Godot.StringName => C.GDEXTENSION_VARIANT_TYPE_STRING_NAME,
+        Godot.NodePath => C.GDEXTENSION_VARIANT_TYPE_NODE_PATH,
+        Godot.RID => C.GDEXTENSION_VARIANT_TYPE_RID,
+        Godot.Object => C.GDEXTENSION_VARIANT_TYPE_OBJECT,
+        Godot.Callable => C.GDEXTENSION_VARIANT_TYPE_CALLABLE,
+        Godot.Signal => C.GDEXTENSION_VARIANT_TYPE_SIGNAL,
+        Godot.Dictionary => C.GDEXTENSION_VARIANT_TYPE_DICTIONARY,
+        Godot.Array => C.GDEXTENSION_VARIANT_TYPE_ARRAY,
 
-        Godot.PackedByteArray => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_BYTE_ARRAY,
-        Godot.PackedInt32Array => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_INT32_ARRAY,
-        Godot.PackedInt64Array => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_INT64_ARRAY,
-        Godot.PackedFloat32Array => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT32_ARRAY,
-        Godot.PackedFloat64Array => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT64_ARRAY,
-        Godot.PackedStringArray => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_STRING_ARRAY,
-        Godot.PackedVector2Array => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY,
-        Godot.PackedVector3Array => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR3_ARRAY,
-        Godot.PackedColorArray => GDE.GDEXTENSION_VARIANT_TYPE_PACKED_COLOR_ARRAY,
-        else => GDE.GDEXTENSION_VARIANT_TYPE_NIL,
+        Godot.PackedByteArray => C.GDEXTENSION_VARIANT_TYPE_PACKED_BYTE_ARRAY,
+        Godot.PackedInt32Array => C.GDEXTENSION_VARIANT_TYPE_PACKED_INT32_ARRAY,
+        Godot.PackedInt64Array => C.GDEXTENSION_VARIANT_TYPE_PACKED_INT64_ARRAY,
+        Godot.PackedFloat32Array => C.GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT32_ARRAY,
+        Godot.PackedFloat64Array => C.GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT64_ARRAY,
+        Godot.PackedStringArray => C.GDEXTENSION_VARIANT_TYPE_PACKED_STRING_ARRAY,
+        Godot.PackedVector2Array => C.GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY,
+        Godot.PackedVector3Array => C.GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR3_ARRAY,
+        Godot.PackedColorArray => C.GDEXTENSION_VARIANT_TYPE_PACKED_COLOR_ARRAY,
+        else => C.GDEXTENSION_VARIANT_TYPE_NIL,
     };
 }
 
@@ -142,16 +142,16 @@ pub fn getVariantType(comptime T: type) Type {
     const RT = getChildTypeOrSelf(T);
 
     const ret = comptime getByGodotType(RT);
-    if (ret == GDE.GDEXTENSION_VARIANT_TYPE_NIL) {
+    if (ret == C.GDEXTENSION_VARIANT_TYPE_NIL) {
         const ret1 = switch (@typeInfo(RT)) {
-            .Struct => GDE.GDEXTENSION_VARIANT_TYPE_OBJECT,
-            .Bool => GDE.GDEXTENSION_VARIANT_TYPE_BOOL,
-            .Int, .ComptimeInt => GDE.GDEXTENSION_VARIANT_TYPE_INT,
-            .Float, .ComptimeFloat => GDE.GDEXTENSION_VARIANT_TYPE_FLOAT,
-            .Void => GDE.GDEXTENSION_VARIANT_TYPE_NIL,
+            .Struct => C.GDEXTENSION_VARIANT_TYPE_OBJECT,
+            .Bool => C.GDEXTENSION_VARIANT_TYPE_BOOL,
+            .Int, .ComptimeInt => C.GDEXTENSION_VARIANT_TYPE_INT,
+            .Float, .ComptimeFloat => C.GDEXTENSION_VARIANT_TYPE_FLOAT,
+            .Void => C.GDEXTENSION_VARIANT_TYPE_NIL,
             else => {
                 @compileLog("Unknown variant type " ++ @typeName(T) ++ " " ++ @tagName(typeInfo) ++ " RT:" ++ @typeName(RT));
-                return GDE.GDEXTENSION_VARIANT_TYPE_NIL;
+                return C.GDEXTENSION_VARIANT_TYPE_NIL;
             },
         };
         return ret1;
@@ -171,9 +171,9 @@ pub fn initFrom(from: anytype) Self {
 }
 pub fn as(self: Self, comptime T: type) T {
     const tid = comptime getVariantType(T);
-    if (tid == GDE.GDEXTENSION_VARIANT_TYPE_OBJECT) {
+    if (tid == C.GDEXTENSION_VARIANT_TYPE_OBJECT) {
         var obj: ?*anyopaque = null;
-        to_type[GDE.GDEXTENSION_VARIANT_TYPE_OBJECT].?(@ptrCast(&obj), @ptrCast(&self.value));
+        to_type[C.GDEXTENSION_VARIANT_TYPE_OBJECT].?(@ptrCast(&obj), @ptrCast(&self.value));
         const godotObj: *Godot.Object = @ptrCast(@alignCast(Godot.getObjectInstanceBinding(obj)));
         const RealType = @typeInfo(T).Pointer.child;
         if (RealType == Godot.Object) {

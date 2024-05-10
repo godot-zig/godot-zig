@@ -1,63 +1,65 @@
 const std = @import("std");
 pub const Variant = @import("Variant.zig");
 pub usingnamespace @import("Vector.zig");
-pub const UtilityFunctions = @import("gen").UtilityFunctions;
-const GD = @import("gen").GodotCore;
-const GDE = GD.GDE;
-const StringName = GD.StringName;
-const String = GD.String;
-pub usingnamespace GD;
+pub const UtilityFunctions = @import("GodotCore").UtilityFunctions;
+const Core = @import("GodotCore"); //.GodotCore;
+const StringName = Core.StringName;
+const String = Core.String;
+pub usingnamespace Core;
+pub usingnamespace Core.C;
 
-pub var dummy_callbacks = GDE.GDExtensionInstanceBindingCallbacks{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback };
+const builtin = @import("builtin");
+
+pub var dummy_callbacks = Core.C.GDExtensionInstanceBindingCallbacks{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback };
 pub fn instanceBindingCreateCallback(_: ?*anyopaque, _: ?*anyopaque) callconv(.C) ?*anyopaque {
     return null;
 }
 pub fn instanceBindingFreeCallback(_: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) callconv(.C) void {}
-pub fn instanceBindingReferenceCallback(_: ?*anyopaque, _: ?*anyopaque, _: GDE.GDExtensionBool) callconv(.C) GDE.GDExtensionBool {
+pub fn instanceBindingReferenceCallback(_: ?*anyopaque, _: ?*anyopaque, _: Core.C.GDExtensionBool) callconv(.C) Core.C.GDExtensionBool {
     return 1;
 }
 
-pub fn getObjectInstanceBinding(obj: GDE.GDExtensionObjectPtr) ?*anyopaque {
-    const retobj = GD.objectGetInstanceBinding(obj, GD.p_library, null);
+pub fn getObjectInstanceBinding(obj: Core.C.GDExtensionObjectPtr) ?*anyopaque {
+    const retobj = Core.objectGetInstanceBinding(obj, Core.p_library, null);
     if (retobj) |r| {
         return @ptrCast(r);
     }
 
     var class_name: StringName = undefined;
-    var callbacks: ?*GDE.GDExtensionInstanceBindingCallbacks = null;
-    if (GD.objectGetClassName(obj, GD.p_library, @ptrCast(&class_name)) == 1) {
-        callbacks = GD.callback_map.get(class_name);
+    var callbacks: ?*Core.C.GDExtensionInstanceBindingCallbacks = null;
+    if (Core.objectGetClassName(obj, Core.p_library, @ptrCast(&class_name)) == 1) {
+        callbacks = Core.callback_map.get(class_name);
     }
     if (callbacks == null) {
-        callbacks = &GD.Object.callbacks_Object;
+        callbacks = &Core.Object.callbacks_Object;
     }
-    return GD.objectGetInstanceBinding(obj, GD.p_library, @ptrCast(callbacks));
+    return Core.objectGetInstanceBinding(obj, Core.p_library, @ptrCast(callbacks));
 }
 
 pub fn unreference(refcounted_obj: anytype) void {
     if (refcounted_obj.unreference()) {
-        GD.objectDestroy(refcounted_obj.godot_object);
+        Core.objectDestroy(refcounted_obj.godot_object);
     }
 }
 
 pub fn getClassName(comptime T: type) *StringName {
-    const C = struct {
+    const Static = struct {
         pub fn makeItUniqueForT() i8 {
             return @sizeOf(T);
         }
         pub var class_name: StringName = undefined;
     };
-    return &C.class_name;
+    return &Static.class_name;
 }
 
 pub fn getParentClassName(comptime T: type) *StringName {
-    const C = struct {
+    const Static = struct {
         pub fn makeItUniqueForT() i8 {
             return @sizeOf(T);
         }
         pub var parent_class_name: StringName = undefined;
     };
-    return &C.parent_class_name;
+    return &Static.parent_class_name;
 }
 
 pub fn stringNameToAscii(strname: StringName, buf: []u8) []const u8 {
@@ -66,7 +68,7 @@ pub fn stringNameToAscii(strname: StringName, buf: []u8) []const u8 {
 }
 
 pub fn stringToAscii(str: String, buf: []u8) []const u8 {
-    const sz = GD.stringToLatin1Chars(@ptrCast(&str), &buf[0], @intCast(buf.len));
+    const sz = Core.stringToLatin1Chars(@ptrCast(&str), &buf[0], @intCast(buf.len));
     return buf[0..@intCast(sz)];
 }
 
@@ -82,40 +84,72 @@ const DATA_OFFSET = if ((ELEMENT_OFFSET + @sizeOf(u64)) % @alignOf(max_align_t) 
 
 pub fn alloc(size: u32) ?*u8 {
     if (@import("builtin").mode == .Debug) {
-        const p = @as([*c]u8, @ptrCast(GD.memAlloc(size)));
+        const p = @as([*c]u8, @ptrCast(Core.memAlloc(size)));
         return p;
     } else {
-        const p = @as([*c]u8, @ptrCast(GD.memAlloc(size + DATA_OFFSET)));
+        const p = @as([*c]u8, @ptrCast(Core.memAlloc(size + DATA_OFFSET)));
         return @ptrCast(&p[DATA_OFFSET]);
     }
 }
 
 pub fn free(ptr: ?*anyopaque) void {
     if (ptr) |p| {
-        GD.memFree(p);
+        Core.memFree(p);
     }
 }
 
 pub fn create(comptime T: type) !*T {
-    const self = try GD.general_allocator.create(T);
+    const self = try Core.general_allocator.create(T);
 
     //warning: every field of T other than godot_object must have a default value.
     //todo: get rid of this limitation
     self.* = T{
-        .godot_object = @ptrCast(@alignCast(GD.classdbConstructObject(@ptrCast(getParentClassName(T))))),
+        .godot_object = @ptrCast(@alignCast(Core.classdbConstructObject(@ptrCast(getParentClassName(T))))),
     };
-    GD.objectSetInstance(self.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
-    GD.objectSetInstanceBinding(self.godot_object, GD.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
+    Core.objectSetInstance(self.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
+    Core.objectSetInstanceBinding(self.godot_object, Core.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
     return self;
 }
 
 pub fn destroy(instance: anytype) void {
     if (@hasField(std.meta.Child(@TypeOf(instance)), "godot_object")) {
-        GD.objectFreeInstanceBinding(instance.godot_object, GD.p_library);
-        GD.objectDestroy(instance.godot_object);
+        Core.objectFreeInstanceBinding(instance.godot_object, Core.p_library);
+        Core.objectDestroy(instance.godot_object);
     } else {
-        GD.general_allocator.destroy(instance);
+        Core.general_allocator.destroy(instance);
     }
+}
+
+const PluginCallback = ?*const fn (userdata: ?*anyopaque, p_level: Core.C.GDExtensionInitializationLevel) void;
+
+pub fn registerPlugin(p_get_proc_address: Core.C.GDExtensionInterfaceGetProcAddress, p_library: Core.C.GDExtensionClassLibraryPtr, r_initialization: [*c]Core.C.GDExtensionInitialization, allocator: std.mem.Allocator, comptime plugin_init_cb: PluginCallback, comptime plugin_deinit_cb: PluginCallback) Core.C.GDExtensionBool {
+    const T = struct {
+        var init_cb = plugin_init_cb;
+        var deinit_cb = plugin_deinit_cb;
+        fn initializeLevel(userdata: ?*anyopaque, p_level: Core.C.GDExtensionInitializationLevel) callconv(.C) void {
+            if (init_cb) |cb| {
+                cb(userdata, p_level);
+            }
+        }
+
+        fn deinitializeLevel(userdata: ?*anyopaque, p_level: Core.C.GDExtensionInitializationLevel) callconv(.C) void {
+            if (p_level == Core.C.GDEXTENSION_INITIALIZATION_CORE) {
+                deinit();
+            }
+
+            if (deinit_cb) |cb| {
+                cb(userdata, p_level);
+            }
+        }
+    };
+
+    r_initialization.*.initialize = T.initializeLevel;
+    r_initialization.*.deinitialize = T.deinitializeLevel;
+    r_initialization.*.minimum_initialization_level = Core.C.GDEXTENSION_INITIALIZATION_SCENE;
+
+    init(p_get_proc_address.?, p_library, allocator) catch unreachable;
+
+    return 1;
 }
 
 var registered_classes: std.StringHashMap(bool) = undefined;
@@ -131,10 +165,10 @@ pub fn registerClass(comptime T: type) void {
 
     const PerClassData = struct {
         pub var class_info = init_blk: {
-            const ClassInfo: struct { T: type, version: i8 } = if (@hasDecl(GDE, "GDExtensionClassCreationInfo3"))
-                .{ .T = GDE.GDExtensionClassCreationInfo3, .version = 3 }
-            else if (@hasDecl(GDE, "GDExtensionClassCreationInfo2"))
-                .{ .T = GDE.GDExtensionClassCreationInfo2, .version = 2 }
+            const ClassInfo: struct { T: type, version: i8 } = if (@hasDecl(Core.C, "GDExtensionClassCreationInfo3"))
+                .{ .T = Core.C.GDExtensionClassCreationInfo3, .version = 3 }
+            else if (@hasDecl(Core.C, "GDExtensionClassCreationInfo2"))
+                .{ .T = Core.C.GDExtensionClassCreationInfo2, .version = 2 }
             else
                 @compileError("Godot 4.2 or higher is required.");
             var c: ClassInfo.T = .{
@@ -163,9 +197,9 @@ pub fn registerClass(comptime T: type) void {
                 c.is_runtime = 0;
             }
             const t = @TypeOf(c.free_property_list_func);
-            if (t == GDE.GDExtensionClassFreePropertyList) {
+            if (t == Core.C.GDExtensionClassFreePropertyList) {
                 c.free_property_list_func = free_property_list_bind;
-            } else if (t == GDE.GDExtensionClassFreePropertyList2) {
+            } else if (t == Core.C.GDExtensionClassFreePropertyList2) {
                 c.free_property_list_func = free_property_list_bind2;
             } else {
                 @compileError(".free_property_list_func is an unknown type.");
@@ -173,7 +207,7 @@ pub fn registerClass(comptime T: type) void {
             break :init_blk c;
         };
 
-        pub fn set_bind(p_instance: GDE.GDExtensionClassInstancePtr, name: GDE.GDExtensionConstStringNamePtr, value: GDE.GDExtensionConstVariantPtr) callconv(.C) GDE.GDExtensionBool {
+        pub fn set_bind(p_instance: Core.C.GDExtensionClassInstancePtr, name: Core.C.GDExtensionConstStringNamePtr, value: Core.C.GDExtensionConstVariantPtr) callconv(.C) Core.C.GDExtensionBool {
             if (p_instance) |p| {
                 return if (T._set(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(name))).*, @as(*Variant, @ptrCast(@constCast(value))).*)) 1 else 0; //fn _set(_: *Self, name: Godot.StringName, _: Godot.Variant) bool
             } else {
@@ -181,21 +215,21 @@ pub fn registerClass(comptime T: type) void {
             }
         }
 
-        pub fn get_bind(p_instance: GDE.GDExtensionClassInstancePtr, name: GDE.GDExtensionConstStringNamePtr, value: GDE.GDExtensionVariantPtr) callconv(.C) GDE.GDExtensionBool {
+        pub fn get_bind(p_instance: Core.C.GDExtensionClassInstancePtr, name: Core.C.GDExtensionConstStringNamePtr, value: Core.C.GDExtensionVariantPtr) callconv(.C) Core.C.GDExtensionBool {
             if (p_instance) |p| {
                 return if (T._get(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(name))).*, @as(*Variant, @ptrCast(value)))) 1 else 0; //fn _get(self:*Self, name: StringName, value:*Variant) bool
             } else {
                 return 0;
             }
         }
-        pub fn get_property_list_bind(p_instance: GDE.GDExtensionClassInstancePtr, r_count: [*c]u32) callconv(.C) [*c]const GDE.GDExtensionPropertyInfo {
+        pub fn get_property_list_bind(p_instance: Core.C.GDExtensionClassInstancePtr, r_count: [*c]u32) callconv(.C) [*c]const Core.C.GDExtensionPropertyInfo {
             if (p_instance) |p| {
                 const ptr: *T = @ptrCast(@alignCast(p));
                 const property_list = T._get_property_list(ptr);
 
                 const count: u32 = @intCast(property_list.len);
 
-                const propertyies = @as([*c]GDE.GDExtensionPropertyInfo, @ptrCast(@alignCast(alloc(@sizeOf(GDE.GDExtensionPropertyInfo) * count))));
+                const propertyies = @as([*c]Core.C.GDExtensionPropertyInfo, @ptrCast(@alignCast(alloc(@sizeOf(Core.C.GDExtensionPropertyInfo) * count))));
                 for (property_list, 0..) |*property, i| {
                     propertyies[i].type = property.type;
                     propertyies[i].hint = property.hint;
@@ -215,53 +249,53 @@ pub fn registerClass(comptime T: type) void {
                 return null;
             }
         }
-        pub fn free_property_list_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_list: [*c]const GDE.GDExtensionPropertyInfo) callconv(.C) void {
+        pub fn free_property_list_bind(p_instance: Core.C.GDExtensionClassInstancePtr, p_list: [*c]const Core.C.GDExtensionPropertyInfo) callconv(.C) void {
             if (@hasDecl(T, "_free_property_list")) {
                 if (p_instance) |p| {
-                    T._free_property_list(@ptrCast(@alignCast(p)), p_list); //fn _free_property_list(self:*Self, p_list:[*c]const GDE.GDExtensionPropertyInfo) void {}
+                    T._free_property_list(@ptrCast(@alignCast(p)), p_list); //fn _free_property_list(self:*Self, p_list:[*c]const Core.C.GDExtensionPropertyInfo) void {}
                 }
             }
             if (p_list) |list| {
                 free(@ptrCast(@constCast(list)));
             }
         }
-        pub fn free_property_list_bind2(p_instance: GDE.GDExtensionClassInstancePtr, p_list: [*c]const GDE.GDExtensionPropertyInfo, p_count: u32) callconv(.C) void {
+        pub fn free_property_list_bind2(p_instance: Core.C.GDExtensionClassInstancePtr, p_list: [*c]const Core.C.GDExtensionPropertyInfo, p_count: u32) callconv(.C) void {
             if (@hasDecl(T, "_free_property_list")) {
                 if (p_instance) |p| {
-                    T._free_property_list(@ptrCast(@alignCast(p)), p_list, p_count); //fn _free_property_list(self:*Self, p_list:[*c]const GDE.GDExtensionPropertyInfo, p_count:u32) void {}
+                    T._free_property_list(@ptrCast(@alignCast(p)), p_list, p_count); //fn _free_property_list(self:*Self, p_list:[*c]const Core.C.GDExtensionPropertyInfo, p_count:u32) void {}
                 }
             }
             if (p_list) |list| {
                 free(@ptrCast(@constCast(list)));
             }
         }
-        pub fn property_can_revert_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_name: GDE.GDExtensionConstStringNamePtr) callconv(.C) GDE.GDExtensionBool {
+        pub fn property_can_revert_bind(p_instance: Core.C.GDExtensionClassInstancePtr, p_name: Core.C.GDExtensionConstStringNamePtr) callconv(.C) Core.C.GDExtensionBool {
             if (p_instance) |p| {
                 return if (T._property_can_revert(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(p_name))).*)) 1 else 0; //fn _property_can_revert(self:*Self, name: StringName) bool
             } else {
                 return 0;
             }
         }
-        pub fn property_get_revert_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_name: GDE.GDExtensionConstStringNamePtr, r_ret: GDE.GDExtensionVariantPtr) callconv(.C) GDE.GDExtensionBool {
+        pub fn property_get_revert_bind(p_instance: Core.C.GDExtensionClassInstancePtr, p_name: Core.C.GDExtensionConstStringNamePtr, r_ret: Core.C.GDExtensionVariantPtr) callconv(.C) Core.C.GDExtensionBool {
             if (p_instance) |p| {
                 return if (T._property_get_revert(@ptrCast(@alignCast(p)), @as(*StringName, @ptrCast(@constCast(p_name))).*, @as(*Variant, @ptrCast(r_ret)))) 1 else 0; //fn _property_get_revert(self:*Self, name: StringName, ret:*Variant) bool
             } else {
                 return 0;
             }
         }
-        pub fn validate_property_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_property: [*c]GDE.GDExtensionPropertyInfo) callconv(.C) GDE.GDExtensionBool {
+        pub fn validate_property_bind(p_instance: Core.C.GDExtensionClassInstancePtr, p_property: [*c]Core.C.GDExtensionPropertyInfo) callconv(.C) Core.C.GDExtensionBool {
             if (p_instance) |p| {
-                return if (T._validate_property(@ptrCast(@alignCast(p)), p_property)) 1 else 0; //fn _validate_property(self:*Self, p_property: [*c]GDE.GDExtensionPropertyInfo) bool
+                return if (T._validate_property(@ptrCast(@alignCast(p)), p_property)) 1 else 0; //fn _validate_property(self:*Self, p_property: [*c]Core.C.GDExtensionPropertyInfo) bool
             } else {
                 return 0;
             }
         }
-        pub fn notification_bind(p_instance: GDE.GDExtensionClassInstancePtr, p_what: i32, _: GDE.GDExtensionBool) callconv(.C) void {
+        pub fn notification_bind(p_instance: Core.C.GDExtensionClassInstancePtr, p_what: i32, _: Core.C.GDExtensionBool) callconv(.C) void {
             if (p_instance) |p| {
                 T._notification(@ptrCast(@alignCast(p)), p_what); //fn _notification(self:*Self, what:i32) void
             }
         }
-        pub fn to_string_bind(p_instance: GDE.GDExtensionClassInstancePtr, r_is_valid: [*c]GDE.GDExtensionBool, p_out: GDE.GDExtensionStringPtr) callconv(.C) void {
+        pub fn to_string_bind(p_instance: Core.C.GDExtensionClassInstancePtr, r_is_valid: [*c]Core.C.GDExtensionBool, p_out: Core.C.GDExtensionStringPtr) callconv(.C) void {
             if (p_instance) |p| {
                 const ret: ?String = T._to_string(@ptrCast(@alignCast(p))); //fn _to_string(self:*Self) ?Godot.String {}
                 if (ret) |r| {
@@ -270,36 +304,36 @@ pub fn registerClass(comptime T: type) void {
                 }
             }
         }
-        pub fn reference_bind(p_instance: GDE.GDExtensionClassInstancePtr) callconv(.C) void {
+        pub fn reference_bind(p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) void {
             T._reference(@ptrCast(@alignCast(p_instance)));
         }
-        pub fn unreference_bind(p_instance: GDE.GDExtensionClassInstancePtr) callconv(.C) void {
+        pub fn unreference_bind(p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) void {
             T._unreference(@ptrCast(@alignCast(p_instance)));
         }
-        pub fn create_instance_bind(p_userdata: ?*anyopaque) callconv(.C) GDE.GDExtensionObjectPtr {
+        pub fn create_instance_bind(p_userdata: ?*anyopaque) callconv(.C) Core.C.GDExtensionObjectPtr {
             _ = p_userdata;
             const ret = create(T) catch unreachable;
             return @ptrCast(ret.godot_object);
         }
-        pub fn free_instance_bind(p_userdata: ?*anyopaque, p_instance: GDE.GDExtensionClassInstancePtr) callconv(.C) void {
-            GD.general_allocator.destroy(@as(*T, @ptrCast(@alignCast(p_instance))));
+        pub fn free_instance_bind(p_userdata: ?*anyopaque, p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) void {
+            Core.general_allocator.destroy(@as(*T, @ptrCast(@alignCast(p_instance))));
             _ = p_userdata;
         }
-        pub fn get_virtual_bind(p_userdata: ?*anyopaque, p_name: GDE.GDExtensionConstStringNamePtr) callconv(.C) GDE.GDExtensionClassCallVirtual {
+        pub fn get_virtual_bind(p_userdata: ?*anyopaque, p_name: Core.C.GDExtensionConstStringNamePtr) callconv(.C) Core.C.GDExtensionClassCallVirtual {
             const virtual_bind = @field(T, "get_virtual_" ++ parent_class_name);
             return virtual_bind(T, p_userdata, p_name);
         }
-        pub fn get_rid_bind(p_instance: GDE.GDExtensionClassInstancePtr) callconv(.C) u64 {
+        pub fn get_rid_bind(p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) u64 {
             return T._get_rid(@ptrCast(@alignCast(p_instance)));
         }
     };
-    const classdbRegisterExtensionClass = if (@hasDecl(GD, "classdbRegisterExtensionClass3"))
-        GD.classdbRegisterExtensionClass3
-    else if (@hasDecl(GD, "classdbRegisterExtensionClass2"))
-        GD.classdbRegisterExtensionClass2
+    const classdbRegisterExtensionClass = if (@hasDecl(Core, "classdbRegisterExtensionClass3"))
+        Core.classdbRegisterExtensionClass3
+    else if (@hasDecl(Core, "classdbRegisterExtensionClass2"))
+        Core.classdbRegisterExtensionClass2
     else
         @compileError("Godot 4.2 or higher is required.");
-    classdbRegisterExtensionClass(@ptrCast(GD.p_library), @ptrCast(getClassName(T)), @ptrCast(getParentClassName(T)), @ptrCast(&PerClassData.class_info));
+    classdbRegisterExtensionClass(@ptrCast(Core.p_library), @ptrCast(getClassName(T)), @ptrCast(getParentClassName(T)), @ptrCast(&PerClassData.class_info));
     if (@hasDecl(T, "_bind_methods")) {
         T._bind_methods();
     }
@@ -310,12 +344,12 @@ pub fn MethodBinderT(comptime MethodType: type) type {
         const ReturnType = @typeInfo(MethodType).Fn.return_type;
         const ArgCount = @typeInfo(MethodType).Fn.params.len;
         const ArgsTuple = std.meta.fields(std.meta.ArgsTuple(MethodType));
-        var arg_properties: [ArgCount + 1]GDE.GDExtensionPropertyInfo = undefined;
-        var arg_metadata: [ArgCount + 1]GDE.GDExtensionClassMethodArgumentMetadata = undefined;
+        var arg_properties: [ArgCount + 1]Core.C.GDExtensionPropertyInfo = undefined;
+        var arg_metadata: [ArgCount + 1]Core.C.GDExtensionClassMethodArgumentMetadata = undefined;
         var method_name: StringName = undefined;
-        var method_info: GDE.GDExtensionClassMethodInfo = undefined;
+        var method_info: Core.C.GDExtensionClassMethodInfo = undefined;
 
-        pub fn bind_call(p_method_userdata: ?*anyopaque, p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstVariantPtr, p_argument_count: GDE.GDExtensionInt, p_return: GDE.GDExtensionVariantPtr, p_error: [*c]GDE.GDExtensionCallError) callconv(.C) void {
+        pub fn bind_call(p_method_userdata: ?*anyopaque, p_instance: Core.C.GDExtensionClassInstancePtr, p_args: [*c]const Core.C.GDExtensionConstVariantPtr, p_argument_count: Core.C.GDExtensionInt, p_return: Core.C.GDExtensionVariantPtr, p_error: [*c]Core.C.GDExtensionCallError) callconv(.C) void {
             _ = p_error;
             const method: *MethodType = @ptrCast(@alignCast(p_method_userdata));
             if (ArgCount == 0) {
@@ -330,7 +364,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
                 args[0] = @ptrCast(@alignCast(p_instance));
                 inline for (0..ArgCount - 1) |i| {
                     if (i < p_argument_count) {
-                        GD.variantNewCopy(@ptrCast(&variants[i]), @ptrCast(p_args[i]));
+                        Core.variantNewCopy(@ptrCast(&variants[i]), @ptrCast(p_args[i]));
                     }
 
                     args[i + 1] = variants[i].as(ArgsTuple[i + 1].type);
@@ -343,17 +377,17 @@ pub fn MethodBinderT(comptime MethodType: type) type {
             }
         }
 
-        fn ptrToArg(comptime T: type, p_arg: GDE.GDExtensionConstTypePtr) T {
+        fn ptrToArg(comptime T: type, p_arg: Core.C.GDExtensionConstTypePtr) T {
             switch (@typeInfo(T)) {
                 .Pointer => |pointer| {
                     const ObjectType = pointer.child;
                     const ObjectTypeName = comptime getBaseName(@typeName(ObjectType));
                     const callbacks = @field(ObjectType, "callbacks_" ++ ObjectTypeName);
                     if (@hasDecl(ObjectType, "reference") and @hasDecl(ObjectType, "unreference")) { //RefCounted
-                        const obj = GD.refGetObject(p_arg);
-                        return @ptrCast(@alignCast(GD.objectGetInstanceBinding(obj, GD.p_library, @ptrCast(&callbacks))));
+                        const obj = Core.refGetObject(p_arg);
+                        return @ptrCast(@alignCast(Core.objectGetInstanceBinding(obj, Core.p_library, @ptrCast(&callbacks))));
                     } else { //normal Object*
-                        return @ptrCast(@alignCast(GD.objectGetInstanceBinding(p_arg, GD.p_library, @ptrCast(&callbacks))));
+                        return @ptrCast(@alignCast(Core.objectGetInstanceBinding(p_arg, Core.p_library, @ptrCast(&callbacks))));
                     }
                 },
                 else => {
@@ -362,7 +396,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
             }
         }
 
-        pub fn bind_ptrcall(p_method_userdata: ?*anyopaque, p_instance: GDE.GDExtensionClassInstancePtr, p_args: [*c]const GDE.GDExtensionConstTypePtr, p_return: GDE.GDExtensionTypePtr) callconv(.C) void {
+        pub fn bind_ptrcall(p_method_userdata: ?*anyopaque, p_instance: Core.C.GDExtensionClassInstancePtr, p_args: [*c]const Core.C.GDExtensionConstTypePtr, p_return: Core.C.GDExtensionTypePtr) callconv(.C) void {
             const method: *MethodType = @ptrCast(@alignCast(p_method_userdata));
             if (ArgCount == 0) {
                 if (ReturnType == void or ReturnType == null) {
@@ -389,7 +423,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
 var registered_methods: std.StringHashMap(bool) = undefined;
 pub fn registerMethod(comptime T: type, comptime name: [:0]const u8) void {
     //prevent duplicate registration
-    const fullname = std.mem.concat(GD.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", name }) catch unreachable;
+    const fullname = std.mem.concat(Core.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", name }) catch unreachable;
     if (registered_methods.contains(fullname)) return;
     registered_methods.put(fullname, true) catch unreachable;
 
@@ -397,35 +431,35 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8) void {
     const MethodBinder = MethodBinderT(@TypeOf(p_method));
 
     MethodBinder.method_name = StringName.initFromLatin1Chars(name);
-    MethodBinder.arg_metadata[0] = GDE.GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
-    MethodBinder.arg_properties[0] = GDE.GDExtensionPropertyInfo{
+    MethodBinder.arg_metadata[0] = Core.C.GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
+    MethodBinder.arg_properties[0] = Core.C.GDExtensionPropertyInfo{
         .type = @intCast(Variant.getVariantType(MethodBinder.ReturnType.?)),
         .name = @ptrCast(@constCast(&StringName.init())),
         .class_name = @ptrCast(@constCast(&StringName.init())),
-        .hint = GD.GlobalEnums.PROPERTY_HINT_NONE,
+        .hint = Core.GlobalEnums.PROPERTY_HINT_NONE,
         .hint_string = @ptrCast(@constCast(&String.init())),
-        .usage = GD.GlobalEnums.PROPERTY_USAGE_NONE,
+        .usage = Core.GlobalEnums.PROPERTY_USAGE_NONE,
     };
 
     inline for (1..MethodBinder.ArgCount) |i| {
-        MethodBinder.arg_properties[i] = GDE.GDExtensionPropertyInfo{
+        MethodBinder.arg_properties[i] = Core.C.GDExtensionPropertyInfo{
             .type = @intCast(Variant.getVariantType(MethodBinder.ArgsTuple[i].type)),
             .name = @ptrCast(@constCast(&StringName.init())),
             .class_name = getClassName(MethodBinder.ArgsTuple[i].type),
-            .hint = GD.GlobalEnums.PROPERTY_HINT_NONE,
+            .hint = Core.GlobalEnums.PROPERTY_HINT_NONE,
             .hint_string = @ptrCast(@constCast(&String.init())),
-            .usage = GD.GlobalEnums.PROPERTY_USAGE_NONE,
+            .usage = Core.GlobalEnums.PROPERTY_USAGE_NONE,
         };
 
-        MethodBinder.arg_metadata[i + 1] = GDE.GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
+        MethodBinder.arg_metadata[i + 1] = Core.C.GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
     }
 
-    MethodBinder.method_info = GDE.GDExtensionClassMethodInfo{
+    MethodBinder.method_info = Core.C.GDExtensionClassMethodInfo{
         .name = @ptrCast(&MethodBinder.method_name),
         .method_userdata = @ptrCast(@constCast(&p_method)),
         .call_func = MethodBinder.bind_call,
         .ptrcall_func = MethodBinder.bind_ptrcall,
-        .method_flags = GDE.GDEXTENSION_METHOD_FLAG_NORMAL,
+        .method_flags = Core.C.GDEXTENSION_METHOD_FLAG_NORMAL,
         .has_return_value = if (MethodBinder.ReturnType != void) 1 else 0,
         .return_value_info = @ptrCast(&MethodBinder.arg_properties[0]),
         .return_value_metadata = MethodBinder.arg_metadata[0],
@@ -436,17 +470,17 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8) void {
         .default_arguments = null,
     };
 
-    GD.classdbRegisterExtensionClassMethod(GD.p_library, getClassName(T), &MethodBinder.method_info);
+    Core.classdbRegisterExtensionClassMethod(Core.p_library, getClassName(T), &MethodBinder.method_info);
 }
 
 var registered_signals: std.StringHashMap(bool) = undefined;
 pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, arguments: []const PropertyInfo) void {
     //prevent duplicate registration
-    const fullname = std.mem.concat(GD.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", signal_name }) catch unreachable;
+    const fullname = std.mem.concat(Core.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", signal_name }) catch unreachable;
     if (registered_signals.contains(fullname)) return;
     registered_signals.put(fullname, true) catch unreachable;
 
-    var propertyies: [32]GDE.GDExtensionPropertyInfo = undefined;
+    var propertyies: [32]Core.C.GDExtensionPropertyInfo = undefined;
     if (arguments.len > 32) {
         std.log.err("why you need so many arguments for a single signal? whatever, you can increase the upper limit as you want", .{});
     }
@@ -461,9 +495,9 @@ pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, argu
     }
 
     if (arguments.len > 0) {
-        GD.classdbRegisterExtensionClassSignal(GD.p_library, getClassName(T), &StringName.initFromLatin1Chars(signal_name), &propertyies[0], @intCast(arguments.len));
+        Core.classdbRegisterExtensionClassSignal(Core.p_library, getClassName(T), &StringName.initFromLatin1Chars(signal_name), &propertyies[0], @intCast(arguments.len));
     } else {
-        GD.classdbRegisterExtensionClassSignal(GD.p_library, getClassName(T), &StringName.initFromLatin1Chars(signal_name), null, 0);
+        Core.classdbRegisterExtensionClassSignal(Core.p_library, getClassName(T), &StringName.initFromLatin1Chars(signal_name), null, 0);
     }
 }
 
@@ -472,13 +506,13 @@ pub fn connect(godot_object: anytype, signal_name: [:0]const u8, instance: anyty
         @compileError("pointer type expected for parameter 'instance'");
     }
     registerMethod(std.meta.Child(@TypeOf(instance)), method_name);
-    const callable = GD.Callable.initFromObjectStringName(instance, method_name);
+    const callable = Core.Callable.initFromObjectStringName(instance, method_name);
     _ = godot_object.connect(signal_name, callable, 0);
 }
 
 pub fn castTo(object: anytype, comptime TargetType: type) ?*TargetType {
-    const classTag = GD.classdbGetClassTag(@ptrCast(getClassName(TargetType)));
-    const casted = GD.objectCastTo(object.godot_object, classTag);
+    const classTag = Core.classdbGetClassTag(@ptrCast(getClassName(TargetType)));
+    const casted = Core.objectCastTo(object.godot_object, classTag);
     if (casted) |c| {
         if (getObjectInstanceBinding(c)) |r| {
             return @ptrCast(@alignCast(r));
@@ -487,41 +521,41 @@ pub fn castTo(object: anytype, comptime TargetType: type) ?*TargetType {
     return null;
 }
 
-pub fn init(getProcAddress: std.meta.Child(GDE.GDExtensionInterfaceGetProcAddress), library: GDE.GDExtensionClassLibraryPtr, allocator_: std.mem.Allocator) !void {
+pub fn init(getProcAddress: std.meta.Child(Core.C.GDExtensionInterfaceGetProcAddress), library: Core.C.GDExtensionClassLibraryPtr, allocator_: std.mem.Allocator) !void {
     registered_classes = std.StringHashMap(bool).init(allocator_);
     registered_methods = std.StringHashMap(bool).init(allocator_);
     registered_signals = std.StringHashMap(bool).init(allocator_);
-    return GD.initCore(getProcAddress, library, allocator_);
+    return Core.initCore(getProcAddress, library, allocator_);
 }
 
 pub fn deinit() void {
-    GD.deinitCore();
+    Core.deinitCore();
     registered_signals.deinit();
     registered_methods.deinit();
     registered_classes.deinit();
 }
 
 pub const PropertyInfo = struct {
-    type: GDE.GDExtensionVariantType = GDE.GDEXTENSION_VARIANT_TYPE_NIL,
+    type: Core.C.GDExtensionVariantType = Core.C.GDEXTENSION_VARIANT_TYPE_NIL,
     name: StringName,
     class_name: StringName,
-    hint: u32 = GD.GlobalEnums.PROPERTY_HINT_NONE,
+    hint: u32 = Core.GlobalEnums.PROPERTY_HINT_NONE,
     hint_string: String,
-    usage: u32 = GD.GlobalEnums.PROPERTY_USAGE_DEFAULT,
+    usage: u32 = Core.GlobalEnums.PROPERTY_USAGE_DEFAULT,
     const Self = @This();
 
-    pub fn init(@"type": GDE.GDExtensionVariantType, name: StringName) Self {
+    pub fn init(@"type": Core.C.GDExtensionVariantType, name: StringName) Self {
         return .{
             .type = @"type",
             .name = name,
             .hint_string = String.initFromUtf8Chars("test property"),
             .class_name = StringName.initFromLatin1Chars(""),
-            .hint = GD.GlobalEnums.PROPERTY_HINT_NONE,
-            .usage = GD.GlobalEnums.PROPERTY_USAGE_DEFAULT,
+            .hint = Core.GlobalEnums.PROPERTY_HINT_NONE,
+            .usage = Core.GlobalEnums.PROPERTY_USAGE_DEFAULT,
         };
     }
 
-    pub fn initFull(@"type": GDE.GDExtensionVariantType, name: StringName, class_name: StringName, hint: u32, hint_string: String, usage: u32) Self {
+    pub fn initFull(@"type": Core.C.GDExtensionVariantType, name: StringName, class_name: StringName, hint: u32, hint_string: String, usage: u32) Self {
         return .{
             .type = @"type",
             .name = name,

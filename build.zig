@@ -1,82 +1,56 @@
 const std = @import("std");
 
-const api_path = "src/api";
+pub fn build(_: *std.Build) void {}
 
-pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
+pub fn createModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, godot_path: []const u8) *std.Build.Module {
     const precision = b.option([]const u8, "precision", "Floating point precision, either `float` or `double` [default: `float`]") orelse "float";
-    const godot_path = b.option([]const u8, "godot", "Path to Godot engine binary [default: `godot`]") orelse "godot";
+    const arch = b.option([]const u8, "arch", "32") orelse "64";
+    const export_path = b.option([]const u8, "output", "Path to save auto-generated files [default: `./gen`]") orelse "./gen";
+    const api_path = b.pathJoin(&.{ export_path, "api" });
+
+    const dump_cmd = b.addSystemCommand(&.{
+        godot_path, "--dump-extension-api", "--dump-gdextension-interface", "--headless",
+    });
+
+    std.fs.cwd().makePath(export_path) catch unreachable;
+
+    dump_cmd.setCwd(.{ .cwd_relative = export_path });
+    const dump_step = b.step("dump", "dump api");
+    dump_step.dependOn(&dump_cmd.step);
+
+    const binding_generator = b.addExecutable(.{ .name = "binding_generator", .target = target, .root_source_file = .{ .path = b.pathJoin(&.{ thisDir(), "binding_generator/main.zig" }) } });
+    binding_generator.addIncludePath(.{ .path = export_path });
+    binding_generator.step.dependOn(dump_step);
+
+    const generate_binding = std.Build.Step.Run.create(b, "bind_godot");
+    generate_binding.addArtifactArg(binding_generator);
+    generate_binding.addArgs(&.{ export_path, api_path, precision, arch });
+
+    const bind_step = b.step("bind", "generate godot bindings");
+    bind_step.dependOn(&generate_binding.step);
 
     const module = b.addModule("godot", .{
-        .root_source_file = .{ .path = "src/api/Godot.zig" },
+        .root_source_file = .{ .path = b.pathJoin(&.{ thisDir(), "src", "api", "Godot.zig" }) },
         .target = target,
         .optimize = optimize,
     });
+    const core_module = b.addModule("GodotCore", .{
+        .root_source_file = .{ .path = b.pathJoin(&.{ api_path, "GodotCore.zig" }) },
+        .target = target,
+        .optimize = optimize,
+    });
+    core_module.addIncludePath(.{ .path = export_path });
+    core_module.addImport("godot", module);
+    module.addImport("GodotCore", core_module);
 
     const build_options = b.addOptions();
     build_options.addOption([]const u8, "precision", precision);
     module.addOptions("build_options", build_options);
+    module.addIncludePath(.{ .path = export_path });
 
-    const generated = generateBindings(b, target, precision, godot_path);
-    generated.addImport("godot", module);
-    module.addImport("gen", generated);
-
-    module.link_libc = true;
-    module.addIncludePath(b.path(api_path));
-
-    // Example project
-    const lib = b.addSharedLibrary(.{
-        .name = "example",
-        .root_source_file = .{ .path = "src/ExamplePlugin.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    lib.root_module.addImport("godot", module);
-
-    b.lib_dir = "./project/lib";
-    b.installArtifact(lib);
-
-    const run_cmd = b.addSystemCommand(&.{
-        godot_path, "--path", "./project",
-    });
-    run_cmd.step.dependOn(b.getInstallStep());
-    const run_step = b.step("run", "Run with Godot");
-    run_step.dependOn(&run_cmd.step);
+    return module;
 }
 
-pub fn generateBindings(b: *std.Build, target: std.Build.ResolvedTarget, precision: []const u8, godot_path: []const u8) *std.Build.Module {
-    // Run godot to dump the API info
-    // This runner script is required for caching because Godot outputs to CWD
-    const godot_runner = b.addExecutable(.{
-        .name = "run_godot_dump",
-        .root_source_file = .{ .path = "binding_generator/run_godot_dump.zig" },
-        .target = b.host,
-    });
-    const dump_cmd = b.addRunArtifact(godot_runner);
-    const dump_path = dump_cmd.addOutputFileArg("extension_api.json");
-    dump_cmd.addArgs(&.{
-        godot_path, "--dump-extension-api", "--dump-gdextension-interface", "--headless",
-    });
-
-    // Run the binding generator
-    const binding_generator = b.addExecutable(.{
-        .name = "binding_generator",
-        .root_source_file = .{ .path = "binding_generator/main.zig" },
-        .target = b.host,
-    });
-    binding_generator.addIncludePath(dump_path.dirname());
-
-    const generate_binding = b.addRunArtifact(binding_generator);
-    generate_binding.addDirectoryArg(dump_path);
-    generate_binding.addArg(b.fmt("{s}_{}", .{ precision, target.result.ptrBitWidth() }));
-    const gen_path = generate_binding.addOutputFileArg("entrypoint.zig");
-
-    const mod = b.createModule(.{
-        .root_source_file = gen_path,
-    });
-    mod.addIncludePath(dump_path.dirname());
-
-    return mod;
+inline fn thisDir() []const u8 {
+    return comptime std.fs.path.dirname(@src().file) orelse ".";
 }
