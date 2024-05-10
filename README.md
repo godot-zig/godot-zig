@@ -4,20 +4,19 @@ Features are being gradually added to meet the needs of a demo game.
 Bugs and missing features are expected until a stable version finally released.  
 Issue report, feature request and pull request are all welcome.  
 
-## Prerequisites:
-1. zig 0.12 or higher
-2. godot 4.2 or higher
+## Branches
+### master:
+1. zig nightly
+2. godot nightly  
+### stable:
+1. zig 0.12.*  
+2. godot 4.2.*  
 
-## Building:
-
-```
-zig build -Dprecision=float -Dgodot=path_to_godot
-godot -e --path ./project                                 # only needed for the first run, to get assets imported
-zig build run
-```
+## Usage:
+see [Examples](https://github.com/godot-zig/godot-zig-examples) for reference.
 
 
-## A GDExtension class example:
+## Code Style:
 ```
 const std = @import("std");
 const Godot = @import("godot");
@@ -66,9 +65,4 @@ pub fn onToggled(self: *Self, toggled_on: bool) void {
     std.debug.print("onToggled {any}\n", .{toggled_on});
 }
 ```
-<img width="960" alt="example screenshot1" src="https://github.com/godot-zig/godot-zig/assets/90960/55cddaf9-18a9-4f15-97e1-669d80e9c34f">
-<img width="960" alt="example screenshot2" src="https://github.com/godot-zig/godot-zig/assets/90960/aea7ab54-3e72-4d6b-b370-01862f9e91e0">
-
-
-## Have fun!
 
