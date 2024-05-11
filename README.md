@@ -1,22 +1,28 @@
 # godot-zig
+
 A WIP Zig bindings for Godot 4.  
 Features are being gradually added to meet the needs of a demo game.  
 Bugs and missing features are expected until a stable version finally released.  
-Issue report, feature request and pull request are all welcome.  
+Issue report, feature request and pull request are all welcome.
 
 ## Branches
+
 ### master:
+
 1. zig nightly
-2. godot nightly  
+2. godot nightly
+
 ### stable:
-1. zig 0.12.*  
-2. godot 4.2.*  
+
+1. zig 0.12.\*
+2. godot 4.2.\*
 
 ## Usage:
+
 see [Examples](https://github.com/godot-zig/godot-zig-examples) for reference.
 
-
 ## Code Style:
+
 ```
 const std = @import("std");
 const Godot = @import("godot");
@@ -65,4 +71,3 @@ pub fn onToggled(self: *Self, toggled_on: bool) void {
     std.debug.print("onToggled {any}\n", .{toggled_on});
 }
 ```
-
