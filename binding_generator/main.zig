@@ -83,8 +83,16 @@ fn isStringType(type_name: string) bool {
     return mem.eql(u8, type_name, "String") or mem.eql(u8, type_name, "StringName");
 }
 
+fn childType(type_name: string) string {
+    var child_type = type_name;
+    while (child_type[0] == '?' or child_type[0] == '*') {
+        child_type = child_type[1..];
+    }
+    return child_type;
+}
+
 fn isRefCounted(type_name: string) bool {
-    const real_type = if (type_name[0] == '*') type_name[1..] else type_name;
+    const real_type = childType(type_name);
     if (engine_class_map.get(real_type)) |v| {
         return v;
     }
@@ -92,7 +100,7 @@ fn isRefCounted(type_name: string) bool {
 }
 
 fn isEngineClass(type_name: string) bool {
-    const real_type = if (type_name[0] == '*') type_name[1..] else type_name;
+    const real_type = childType(type_name);
     return mem.eql(u8, real_type, "Object") or engine_class_map.contains(real_type);
 }
 
@@ -137,10 +145,7 @@ fn getVariantTypeName(class_name: string) string {
 }
 
 fn addDependType(type_name: string) !void {
-    var depend_type = type_name;
-    if (type_name[0] == '*') {
-        depend_type = type_name[1..];
-    }
+    var depend_type = childType(type_name);
 
     if (mem.startsWith(u8, depend_type, "TypedArray")) {
         depend_type = depend_type[11 .. depend_type.len - 1];
@@ -285,7 +290,14 @@ fn getArgumentsTypes(fn_node: anytype, buf: []u8) string {
     return buf[0..pos];
 }
 
-fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocator, class_name: string, func_name: string, return_type: string, comptime proc_type: ProcType) !void {
+fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocator, class_name: string, func_name: string, return_type_orig: string, comptime proc_type: ProcType) !void {
+    var return_type: string = undefined;
+    if (std.mem.startsWith(u8, return_type_orig, "*")) {
+        return_type = try temp_buf.bufPrint("?{s}", .{return_type_orig});
+    } else {
+        return_type = return_type_orig;
+    }
+
     if (proc_type == .Constructor) {
         var buf: [256]u8 = undefined;
         const atypes = getArgumentsTypes(fn_node, &buf);
@@ -366,8 +378,8 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
     try code_builder.printLine(0, ") {s} {{", .{return_type});
     if (need_return) {
         try addDependType(return_type);
-        if (return_type[0] == '*') {
-            try code_builder.printLine(1, "var result:?{s} = null;", .{return_type});
+        if (return_type[0] == '?') {
+            try code_builder.printLine(1, "var result:{s} = null;", .{return_type});
         } else {
             try code_builder.printLine(1, "var result:{0s} = @import(\"std\").mem.zeroes({0s});", .{return_type});
         }
@@ -467,11 +479,7 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
     }
 
     if (need_return) {
-        if (return_type[0] == '*') {
-            try code_builder.writeLine(1, "return result.?;");
-        } else {
-            try code_builder.writeLine(1, "return result;");
-        }
+        try code_builder.writeLine(1, "return result;");
     }
     try code_builder.writeLine(0, "}");
 }
