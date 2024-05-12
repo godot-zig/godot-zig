@@ -215,9 +215,9 @@ fn generateGlobalEnums(api: anytype, allocator: std.mem.Allocator) !void {
     for (api.value.global_enums) |ge| {
         if (std.mem.startsWith(u8, ge.name, "Variant.")) continue;
 
-        try code_builder.printLine(0, "pub const {s} = c_int;", .{ge.name});
+        try code_builder.printLine(0, "pub const {s} = i64;", .{ge.name});
         for (ge.values) |v| {
-            try code_builder.printLine(0, "pub const {s}:c_int = {d};", .{ v.name, v.value });
+            try code_builder.printLine(0, "pub const {s}:i64 = {d};", .{ v.name, v.value });
         }
     }
 
