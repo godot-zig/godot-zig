@@ -22,20 +22,10 @@ pub fn instanceBindingReferenceCallback(_: ?*anyopaque, _: ?*anyopaque, _: Core.
 pub fn getObjectFromInstance(comptime T: type, obj: Core.C.GDExtensionObjectPtr) ?*T {
     const retobj = Core.objectGetInstanceBinding(obj, Core.p_library, null);
     if (retobj) |r| {
-        return @ptrCast(r);
+        return @ptrCast(@alignCast(r));
     } else {
         return null;
     }
-
-    // var class_name: StringName = undefined;
-    // var callbacks: ?*Core.C.GDExtensionInstanceBindingCallbacks = null;
-    // if (Core.objectGetClassName(obj, Core.p_library, @ptrCast(&class_name)) == 1) {
-    //     callbacks = Core.callback_map.get(class_name);
-    // }
-    // if (callbacks == null) {
-    //     callbacks = &Core.Object.callbacks_Object;
-    // }
-    // return Core.objectGetInstanceBinding(obj, Core.p_library, @ptrCast(callbacks));
 }
 
 pub fn unreference(refcounted_obj: anytype) void {
@@ -128,6 +118,9 @@ pub fn cast(comptime T: type, inst: anytype) ?T {
 pub fn create(comptime T: type) !*T {
     const self = try Core.general_allocator.create(T);
     self.* = std.mem.zeroInit(T, .{});
+    if (@hasDecl(T, "init")) {
+        self.init();
+    }
     self.base = .{ .godot_object = Core.classdbConstructObject(@ptrCast(getParentClassName(T))) };
     Core.objectSetInstance(self.base.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
     Core.objectSetInstanceBinding(self.base.godot_object, Core.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
@@ -135,11 +128,11 @@ pub fn create(comptime T: type) !*T {
 }
 
 pub fn destroy(instance: anytype) void {
-    if (@hasField(std.meta.Child(@TypeOf(instance)), "godot_object")) {
+    if (@hasField(@TypeOf(instance), "godot_object")) {
         Core.objectFreeInstanceBinding(instance.godot_object, Core.p_library);
         Core.objectDestroy(instance.godot_object);
     } else {
-        Core.general_allocator.destroy(instance);
+        @compileError("only engine object can be destroyed");
     }
 }
 
@@ -339,6 +332,9 @@ pub fn registerClass(comptime T: type) void {
             return @ptrCast(ret.base.godot_object);
         }
         pub fn free_instance_bind(p_userdata: ?*anyopaque, p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) void {
+            if (@hasDecl(T, "deinit")) {
+                @as(*T, @ptrCast(@alignCast(p_instance))).deinit();
+            }
             Core.general_allocator.destroy(@as(*T, @ptrCast(@alignCast(p_instance))));
             _ = p_userdata;
         }
