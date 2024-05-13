@@ -19,21 +19,23 @@ pub fn instanceBindingReferenceCallback(_: ?*anyopaque, _: ?*anyopaque, _: Core.
     return 1;
 }
 
-pub fn getObjectInstanceBinding(obj: Core.C.GDExtensionObjectPtr) ?*anyopaque {
+pub fn getObjectFromInstance(comptime T: type, obj: Core.C.GDExtensionObjectPtr) ?*T {
     const retobj = Core.objectGetInstanceBinding(obj, Core.p_library, null);
     if (retobj) |r| {
         return @ptrCast(r);
+    } else {
+        return null;
     }
 
-    var class_name: StringName = undefined;
-    var callbacks: ?*Core.C.GDExtensionInstanceBindingCallbacks = null;
-    if (Core.objectGetClassName(obj, Core.p_library, @ptrCast(&class_name)) == 1) {
-        callbacks = Core.callback_map.get(class_name);
-    }
-    if (callbacks == null) {
-        callbacks = &Core.Object.callbacks_Object;
-    }
-    return Core.objectGetInstanceBinding(obj, Core.p_library, @ptrCast(callbacks));
+    // var class_name: StringName = undefined;
+    // var callbacks: ?*Core.C.GDExtensionInstanceBindingCallbacks = null;
+    // if (Core.objectGetClassName(obj, Core.p_library, @ptrCast(&class_name)) == 1) {
+    //     callbacks = Core.callback_map.get(class_name);
+    // }
+    // if (callbacks == null) {
+    //     callbacks = &Core.Object.callbacks_Object;
+    // }
+    // return Core.objectGetInstanceBinding(obj, Core.p_library, @ptrCast(callbacks));
 }
 
 pub fn unreference(refcounted_obj: anytype) void {
@@ -98,16 +100,37 @@ pub fn free(ptr: ?*anyopaque) void {
     }
 }
 
+pub fn getGodotObjectPtr(inst: anytype) *const ?*anyopaque {
+    const typeInfo = @typeInfo(@TypeOf(inst));
+    if (typeInfo != .Pointer) {
+        @compileError("pointer required");
+    }
+    const T = typeInfo.Pointer.child;
+    if (@hasField(T, "godot_object")) {
+        return &inst.godot_object;
+    } else if (@hasField(T, "base")) {
+        return getGodotObjectPtr(&inst.base);
+    }
+}
+
+pub fn cast(comptime T: type, inst: anytype) ?T {
+    if (@typeInfo(@TypeOf(inst)) == .Optional) {
+        if (inst) |i| {
+            return .{ .godot_object = i.godot_object };
+        } else {
+            return null;
+        }
+    } else {
+        return .{ .godot_object = inst.godot_object };
+    }
+}
+
 pub fn create(comptime T: type) !*T {
     const self = try Core.general_allocator.create(T);
-
-    //warning: every field of T other than godot_object must have a default value.
-    //todo: get rid of this limitation
-    self.* = T{
-        .godot_object = @ptrCast(@alignCast(Core.classdbConstructObject(@ptrCast(getParentClassName(T))))),
-    };
-    Core.objectSetInstance(self.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
-    Core.objectSetInstanceBinding(self.godot_object, Core.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
+    self.* = std.mem.zeroInit(T, .{});
+    self.base = .{ .godot_object = Core.classdbConstructObject(@ptrCast(getParentClassName(T))) };
+    Core.objectSetInstance(self.base.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
+    Core.objectSetInstanceBinding(self.base.godot_object, Core.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
     return self;
 }
 
@@ -158,7 +181,7 @@ pub fn registerClass(comptime T: type) void {
     if (registered_classes.contains(@typeName(T))) return;
     registered_classes.put(@typeName(T), true) catch unreachable;
 
-    const P = @typeInfo(std.meta.FieldType(T, .godot_object)).Pointer.child;
+    const P = std.meta.FieldType(T, .base);
     const parent_class_name: [:0]const u8 = comptime getBaseName(@typeName(P));
     getParentClassName(T).* = StringName.initFromLatin1Chars(parent_class_name);
     getClassName(T).* = StringName.initFromLatin1Chars(getBaseName(@typeName(T)));
@@ -313,7 +336,7 @@ pub fn registerClass(comptime T: type) void {
         pub fn create_instance_bind(p_userdata: ?*anyopaque) callconv(.C) Core.C.GDExtensionObjectPtr {
             _ = p_userdata;
             const ret = create(T) catch unreachable;
-            return @ptrCast(ret.godot_object);
+            return @ptrCast(ret.base.godot_object);
         }
         pub fn free_instance_bind(p_userdata: ?*anyopaque, p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) void {
             Core.general_allocator.destroy(@as(*T, @ptrCast(@alignCast(p_instance))));
@@ -379,15 +402,25 @@ pub fn MethodBinderT(comptime MethodType: type) type {
 
         fn ptrToArg(comptime T: type, p_arg: Core.C.GDExtensionConstTypePtr) T {
             switch (@typeInfo(T)) {
-                .Pointer => |pointer| {
-                    const ObjectType = pointer.child;
-                    const ObjectTypeName = comptime getBaseName(@typeName(ObjectType));
-                    const callbacks = @field(ObjectType, "callbacks_" ++ ObjectTypeName);
-                    if (@hasDecl(ObjectType, "reference") and @hasDecl(ObjectType, "unreference")) { //RefCounted
+                // .Pointer => |pointer| {
+                //     const ObjectType = pointer.child;
+                //     const ObjectTypeName = comptime getBaseName(@typeName(ObjectType));
+                //     const callbacks = @field(ObjectType, "callbacks_" ++ ObjectTypeName);
+                //     if (@hasDecl(ObjectType, "reference") and @hasDecl(ObjectType, "unreference")) { //RefCounted
+                //         const obj = Core.refGetObject(p_arg);
+                //         return @ptrCast(@alignCast(Core.objectGetInstanceBinding(obj, Core.p_library, @ptrCast(&callbacks))));
+                //     } else { //normal Object*
+                //         return @ptrCast(@alignCast(Core.objectGetInstanceBinding(p_arg, Core.p_library, @ptrCast(&callbacks))));
+                //     }
+                // },
+                .Struct => {
+                    if (@hasDecl(T, "reference") and @hasDecl(T, "unreference")) { //RefCounted
                         const obj = Core.refGetObject(p_arg);
-                        return @ptrCast(@alignCast(Core.objectGetInstanceBinding(obj, Core.p_library, @ptrCast(&callbacks))));
-                    } else { //normal Object*
-                        return @ptrCast(@alignCast(Core.objectGetInstanceBinding(p_arg, Core.p_library, @ptrCast(&callbacks))));
+                        return .{ .godot_object = obj };
+                    } else if (@hasField(T, "godot_object")) {
+                        return .{ .godot_object = p_arg };
+                    } else {
+                        return @as(*T, @ptrCast(@constCast(@alignCast(p_arg)))).*;
                     }
                 },
                 else => {
@@ -508,17 +541,6 @@ pub fn connect(godot_object: anytype, signal_name: [:0]const u8, instance: anyty
     registerMethod(std.meta.Child(@TypeOf(instance)), method_name);
     const callable = Core.Callable.initFromObjectStringName(instance, method_name);
     _ = godot_object.connect(signal_name, callable, 0);
-}
-
-pub fn castTo(object: anytype, comptime TargetType: type) ?*TargetType {
-    const classTag = Core.classdbGetClassTag(@ptrCast(getClassName(TargetType)));
-    const casted = Core.objectCastTo(object.godot_object, classTag);
-    if (casted) |c| {
-        if (getObjectInstanceBinding(c)) |r| {
-            return @ptrCast(@alignCast(r));
-        }
-    }
-    return null;
 }
 
 pub fn init(getProcAddress: std.meta.Child(Core.C.GDExtensionInterfaceGetProcAddress), library: Core.C.GDExtensionClassLibraryPtr, allocator_: std.mem.Allocator) !void {

@@ -28,7 +28,7 @@ const builtin_type_map = std.StaticStringMap(void).initComptime(.{ .{"i8"}, .{"u
 const native_type_map = std.StaticStringMap(void).initComptime(.{ .{"Vector2"}, .{"Vector2i"}, .{"Vector3"}, .{"Vector3i"}, .{"Vector4"}, .{"Vector4i"} });
 var singletons_map: StringStringMap = undefined;
 var all_classes: std.ArrayList(string) = undefined;
-var all_callback_classes: std.ArrayList(string) = undefined;
+var all_engine_classes: std.ArrayList(string) = undefined;
 var depends: std.ArrayList(string) = undefined;
 
 pub fn camelCaseToSnake(in: []const u8, buf: []u8) []const u8 {
@@ -194,13 +194,11 @@ fn correctType(type_name: string, meta: string) string {
     }
 
     if (isRefCounted(correct_type)) {
-        //use weak pointer instead since Zig lack RAII
-        return temp_buf.bufPrint("*{s}", .{correct_type}) catch unreachable;
-        //return temp_buf.bufPrint("Ref({s})", .{correct_type}) catch unreachable;
+        return temp_buf.bufPrint("?{s}", .{correct_type}) catch unreachable;
     } else if (isEngineClass(correct_type)) {
-        return temp_buf.bufPrint("*{s}", .{correct_type}) catch unreachable;
+        return temp_buf.bufPrint("?{s}", .{correct_type}) catch unreachable;
     } else if (correct_type[correct_type.len - 1] == '*') {
-        return temp_buf.bufPrint("*{s}", .{correct_type[0 .. correct_type.len - 1]}) catch unreachable;
+        return temp_buf.bufPrint("?*{s}", .{correct_type[0 .. correct_type.len - 1]}) catch unreachable;
     }
     return correct_type;
 }
@@ -275,7 +273,7 @@ fn getArgumentsTypes(fn_node: anytype, buf: []u8) string {
             for (as, 0..) |a, i| {
                 _ = i;
                 const arg_type = correctType(a.type, "");
-                if (arg_type[0] == '*') {
+                if (arg_type[0] == '*' or arg_type[0] == '?') {
                     mem.copyForwards(u8, buf[pos..], arg_type[1..]);
                     buf[pos] = std.ascii.toUpper(buf[pos]);
                     pos += arg_type.len - 1;
@@ -351,9 +349,8 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
                 if (isEngineClass(arg_type)) {
                     try code_builder.writer.print("{s}: anytype", .{arg_name});
                 } else {
-                    //String or StringName parameters are transformed to [:0]const u8 for convenience, except for that from String&StringName itself
-                    if (((!mem.eql(u8, class_name, "String") and !mem.eql(u8, class_name, "StringName")) or proc_type != .Constructor) and (mem.eql(u8, arg_type, "String") or mem.eql(u8, arg_type, "StringName"))) {
-                        try code_builder.writer.print("{s}: [:0]const u8", .{arg_name});
+                    if ((proc_type != .Constructor or !isStringType(class_name)) and (isStringType(arg_type))) {
+                        try code_builder.writer.print("{s}: anytype", .{arg_name});
                     } else {
                         try code_builder.writer.print("{s}: {s}", .{ arg_name, arg_type });
                     }
@@ -408,11 +405,13 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
         try code_builder.printLine(1, "var args:[{d}]Godot.GDExtensionConstTypePtr = undefined;", .{args.items.len});
         for (0..args.items.len) |i| {
             if (isEngineClass(arg_types.items[i])) {
-                try code_builder.printLine(1, "if(@typeInfo(@TypeOf({1s})) == .Pointer) {{ args[{0d}] = @ptrCast(&({1s}.godot_object)); }}", .{ i, args.items[i] });
-                try code_builder.printLine(1, "else if({1s} == null) {{ args[{0d}] = null; }} else {{ args[{0d}] = @ptrCast(&({1s}.?.godot_object)); }}", .{ i, args.items[i] });
+                try code_builder.printLine(1, "if(@typeInfo(@TypeOf({1s})) == .Struct) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr(&{1s})); }}", .{ i, args.items[i] });
+                try code_builder.printLine(1, "else if(@typeInfo(@TypeOf({1s})) == .Optional) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr(&{1s}.?)); }}", .{ i, args.items[i] });
+                try code_builder.printLine(1, "else if(@typeInfo(@TypeOf({1s})) == .Pointer) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr({1s})); }}", .{ i, args.items[i] });
+                try code_builder.printLine(1, "else {{ args[{0d}] = null; }}", .{i});
             } else {
                 if ((proc_type != .Constructor or !isStringType(class_name)) and (isStringType(arg_types.items[i]))) {
-                    try code_builder.printLine(1, "args[{d}] = @ptrCast(&{s}.initFromLatin1Chars({s}));", .{ i, arg_types.items[i], args.items[i] });
+                    try code_builder.printLine(1, "if(@TypeOf({2s}) == {1s}) {{ args[{0d}] = @ptrCast(&{2s}); }} else {{ args[{0d}] = @ptrCast(&{1s}.initFromLatin1Chars({2s})); }}", .{ i, arg_types.items[i], args.items[i] });
                 } else {
                     try code_builder.printLine(1, "args[{d}] = @ptrCast(&{s});", .{ i, args.items[i] });
                 }
@@ -443,18 +442,21 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             if (is_vararg) {
                 try code_builder.writeLine(1, "var err:Godot.GDExtensionCallError = undefined;");
                 if (std.mem.eql(u8, return_type, "Variant")) {
-                    try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(self.godot_object), @ptrCast(@alignCast(&args[0])), args.len, &result, &err);");
+                    try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), @ptrCast(@alignCast(&args[0])), args.len, &result, &err);");
                 } else {
                     try code_builder.writeLine(1, "var ret:Variant = Variant.init();");
-                    try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(self.godot_object), @ptrCast(@alignCast(&args[0])), args.len, &ret, &err);");
+                    try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), @ptrCast(@alignCast(&args[0])), args.len, &ret, &err);");
                     if (need_return) {
                         try code_builder.printLine(1, "result = ret.as({s});", .{return_type});
                     }
                 }
             } else {
-                try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(self.godot_object), {s}, {s});", .{ arg_array, result_string });
                 if (isEngineClass(return_type)) {
-                    try code_builder.writeLine(1, "result = @ptrCast(@alignCast(Godot.getObjectInstanceBinding(@ptrCast(result))));");
+                    try code_builder.writeLine(1, "var godot_object:?*anyopaque = null;");
+                    try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), {s}, @ptrCast(&godot_object));", .{arg_array});
+                    try code_builder.printLine(1, "result = {s}{{ .godot_object = godot_object }};", .{childType(return_type)});
+                } else {
+                    try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), {s}, {s});", .{ arg_array, result_string });
                 }
             }
         },
@@ -757,6 +759,9 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
 
         const class_name = bc.name;
         try all_classes.append(class_name);
+        if (!is_builtin_class) {
+            try all_engine_classes.append(class_name);
+        }
 
         code_builder.reset();
         depends.clearRetainingCapacity();
@@ -774,7 +779,6 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 try code_builder.printLine(0, "pub usingnamespace Godot.{s};", .{bc.inherits});
             }
         }
-        try code_builder.writeLine(0, "var name: StringName = undefined;");
 
         if (bc.enums) |es| {
             for (es) |e| {
@@ -794,37 +798,16 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 }
             }
         }
-        if (!is_builtin_class) {
-            const constructor_code =
-                \\pub fn new{0s}() *{0s} {{
-                \\    var self = @as(*{0s}, @ptrCast(@alignCast(Godot.memAlloc(@sizeOf({0s})))));
-                \\    self.godot_object = @ptrCast(@alignCast(Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s})))));
-                \\    Godot.objectSetInstanceBinding(self.godot_object, Godot.p_library, @ptrCast(self), @ptrCast(&callbacks_{0s}));
-                \\    return self;
-                \\}}
-            ;
-
-            try all_callback_classes.append(class_name);
-            if (!isSingleton(class_name)) {
-                try code_builder.printLine(0, constructor_code, .{class_name});
-            }
-        }
 
         if (isSingleton(class_name)) {
             const singleton_code =
-                \\var instance: ?*{0s} = null;
-                \\pub fn getSingleton() *{0s} {{
+                \\var instance: ?{0s} = null;
+                \\pub fn getSingleton() {0s} {{
                 \\    if(instance == null ) {{
                 \\        const obj = Godot.globalGetSingleton(@ptrCast(Godot.getClassName({0s})));
-                \\        instance = @ptrCast(@alignCast(Godot.objectGetInstanceBinding(obj, Godot.p_library, @ptrCast(&callbacks_{0s}))));
+                \\        instance = .{{ .godot_object = obj }};
                 \\    }}
                 \\    return instance.?;
-                \\}}
-                \\pub fn releaseSingleton() void {{
-                \\    if(instance)|inst| {{
-                \\        Godot.objectFreeInstanceBinding(inst.godot_object,Godot.p_library);
-                \\        instance = null;
-                \\    }}
                 \\}}
             ;
             try code_builder.printLine(0, singleton_code, .{class_name});
@@ -835,7 +818,7 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             try generateMethod(bc, code_builder, allocator, is_builtin_class);
         }
 
-        if (!is_builtin_class) {
+        if (false) {
             const callbacks_code =
                 \\pub var callbacks_{0s} = Godot.GDExtensionInstanceBindingCallbacks{{ .create_callback = instanceBindingCreateCallback, .free_callback = instanceBindingFreeCallback, .reference_callback = instanceBindingReferenceCallback }};
                 \\fn instanceBindingCreateCallback(p_token: ?*anyopaque, p_instance: ?*anyopaque) callconv(.C) ?*anyopaque {{
@@ -903,7 +886,6 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
 
     const callback_decl_code =
         \\const BindingCallbackMap = std.AutoHashMap(StringName, *Godot.GDExtensionInstanceBindingCallbacks);
-        \\pub var callback_map: BindingCallbackMap = undefined;
     ;
     try code_builder.writeLine(0, callback_decl_code);
 
@@ -933,22 +915,31 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
     try loader_builder.writeLine(1, "arena = std.heap.ArenaAllocator.init(allocator_);");
     try loader_builder.writeLine(1, "arena_allocator = arena.allocator();");
     try loader_builder.writeLine(1, "Godot.Variant.initBindings();");
-    try loader_builder.writeLine(1, "callback_map = BindingCallbackMap.init(general_allocator);");
 
-    for (all_callback_classes.items) |cls| {
+    for (all_engine_classes.items) |cls| {
         try loader_builder.printLine(1, "Godot.getClassName({0s}).* = StringName.initFromLatin1Chars(\"{0s}\");", .{cls});
-        try loader_builder.printLine(1, "try callback_map.put(Godot.getClassName({0s}).*, &{0s}.callbacks_{0s});", .{cls});
     }
 
     try loader_builder.writeLine(0, "}");
     try loader_builder.writeLine(0, "pub fn deinitCore() void {");
-    try loader_builder.writeLine(1, "callback_map.deinit();");
-    for (all_callback_classes.items) |cls| {
+    for (all_engine_classes.items) |cls| {
         try loader_builder.printLine(1, "Godot.getClassName({0s}).deinit();", .{cls});
     }
     try loader_builder.writeLine(1, "arena.deinit();");
 
     try loader_builder.writeLine(0, "}");
+    for (all_engine_classes.items) |cls| {
+        const constructor_code =
+            \\pub fn init{0s}() {0s} {{
+            \\    return .{{ 
+            \\        .godot_object = Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s})))
+            \\    }};
+            \\}}
+        ;
+        if (!isSingleton(cls)) {
+            try loader_builder.printLine(0, constructor_code, .{cls});
+        }
+    }
 
     try code_builder.writeLine(0, loader_builder.getWritten());
 
@@ -983,8 +974,8 @@ pub fn main() !void {
     all_classes = std.ArrayList(string).init(allocator);
     defer all_classes.deinit();
     temp_buf = try StreamBuilder(u8, 1024 * 1024).init(allocator);
-    all_callback_classes = std.ArrayList(string).init(allocator);
-    defer all_callback_classes.deinit();
+    all_engine_classes = std.ArrayList(string).init(allocator);
+    defer all_engine_classes.deinit();
     defer temp_buf.deinit();
 
     cwd = std.fs.cwd();
