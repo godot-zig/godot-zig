@@ -309,6 +309,7 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
     }
 
     const is_const = (proc_type == .BuiltinClassMethod or proc_type == .EngineClassMethod) and fn_node.is_const;
+    const is_static = (proc_type == .BuiltinClassMethod or proc_type == .EngineClassMethod) and fn_node.is_static;
     const is_vararg = proc_type != .Constructor and proc_type != .Destructor and fn_node.is_vararg;
 
     var args = std.ArrayList(string).init(allocator);
@@ -317,17 +318,19 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
     defer arg_types.deinit();
     const need_return = !mem.eql(u8, return_type, "void");
     var is_first_arg = true;
-    if (proc_type == .BuiltinClassMethod or proc_type == .Destructor) {
-        if (is_const) {
-            _ = try code_builder.writer.write("self: Self");
-        } else {
-            _ = try code_builder.writer.write("self: *Self");
-        }
+    if (!is_static) {
+        if (proc_type == .BuiltinClassMethod or proc_type == .Destructor) {
+            if (is_const) {
+                _ = try code_builder.writer.write("self: Self");
+            } else {
+                _ = try code_builder.writer.write("self: *Self");
+            }
 
-        is_first_arg = false;
-    } else if (proc_type == .EngineClassMethod) {
-        _ = try code_builder.writer.write("self: anytype");
-        is_first_arg = false;
+            is_first_arg = false;
+        } else if (proc_type == .EngineClassMethod) {
+            _ = try code_builder.writer.write("self: anytype");
+            is_first_arg = false;
+        }
     }
     const arg_name_postfix = "_"; //to avoid shadowing member function, which is not allowed in Zig
 
@@ -434,6 +437,8 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             try code_builder.printLine(1, "Binding.method.?({s}, {s}, {s});", .{ result_string, arg_array, arg_count });
         },
         .EngineClassMethod => {
+            const self_ptr = if (is_static) "null" else "@ptrCast(Godot.getGodotObjectPtr(self).*)";
+
             try code_builder.writeLine(1, "const Binding = struct{ pub var method:Godot.GDExtensionMethodBindPtr = null; };");
             try code_builder.writeLine(1, "if( Binding.method == null ) {");
             try code_builder.printLine(2, "const func_name = StringName.initFromLatin1Chars(\"{s}\");", .{func_name});
@@ -442,10 +447,10 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             if (is_vararg) {
                 try code_builder.writeLine(1, "var err:Godot.GDExtensionCallError = undefined;");
                 if (std.mem.eql(u8, return_type, "Variant")) {
-                    try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), @ptrCast(@alignCast(&args[0])), args.len, &result, &err);");
+                    try code_builder.printLine(1, "Godot.objectMethodBindCall(Binding.method.?, {s}, @ptrCast(@alignCast(&args[0])), args.len, &result, &err);", .{self_ptr});
                 } else {
                     try code_builder.writeLine(1, "var ret:Variant = Variant.init();");
-                    try code_builder.writeLine(1, "Godot.objectMethodBindCall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), @ptrCast(@alignCast(&args[0])), args.len, &ret, &err);");
+                    try code_builder.printLine(1, "Godot.objectMethodBindCall(Binding.method.?, {s}, @ptrCast(@alignCast(&args[0])), args.len, &ret, &err);", .{self_ptr});
                     if (need_return) {
                         try code_builder.printLine(1, "result = ret.as({s});", .{return_type});
                     }
@@ -453,10 +458,10 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             } else {
                 if (isEngineClass(return_type)) {
                     try code_builder.writeLine(1, "var godot_object:?*anyopaque = null;");
-                    try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), {s}, @ptrCast(&godot_object));", .{arg_array});
+                    try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, {s}, {s}, @ptrCast(&godot_object));", .{ self_ptr, arg_array });
                     try code_builder.printLine(1, "result = {s}{{ .godot_object = godot_object }};", .{childType(return_type)});
                 } else {
-                    try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, @ptrCast(Godot.getGodotObjectPtr(self).*), {s}, {s});", .{ arg_array, result_string });
+                    try code_builder.printLine(1, "Godot.objectMethodBindPtrcall(Binding.method.?, {s}, {s}, {s});", .{ self_ptr, arg_array, result_string });
                 }
             }
         },
@@ -466,7 +471,11 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
             try code_builder.printLine(2, "const func_name = StringName.initFromLatin1Chars(\"{s}\");", .{func_name});
             try code_builder.printLine(2, "Binding.method = Godot.variantGetPtrBuiltinMethod({s}, @ptrCast(&func_name.value), {d});", .{ enum_type_name, fn_node.hash });
             try code_builder.writeLine(1, "}");
-            try code_builder.printLine(1, "Binding.method.?(@ptrCast(@constCast(&self.value)), {s}, {s}, {s});", .{ arg_array, result_string, arg_count });
+            if (is_static) {
+                try code_builder.printLine(1, "Binding.method.?(null, {s}, {s}, {s});", .{ arg_array, result_string, arg_count });
+            } else {
+                try code_builder.printLine(1, "Binding.method.?(@ptrCast(@constCast(&self.value)), {s}, {s}, {s});", .{ arg_array, result_string, arg_count });
+            }
         },
         .Constructor => {
             try code_builder.writeLine(1, "const Binding = struct{ pub var method:Godot.GDExtensionPtrConstructor = null; };");
