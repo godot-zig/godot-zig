@@ -115,15 +115,24 @@ pub fn cast(comptime T: type, inst: anytype) ?T {
     }
 }
 
+pub fn castSafe(comptime TargetType: type, object: anytype) ?TargetType {
+    const classTag = Core.classdbGetClassTag(@ptrCast(getClassName(TargetType)));
+    const casted = Core.objectCastTo(object.godot_object, classTag);
+    if (casted) |c| {
+        return TargetType{ .godot_object = c };
+    }
+    return null;
+}
+
 pub fn create(comptime T: type) !*T {
     const self = try Core.general_allocator.create(T);
     self.* = std.mem.zeroInit(T, .{});
-    if (@hasDecl(T, "init")) {
-        self.init();
-    }
     self.base = .{ .godot_object = Core.classdbConstructObject(@ptrCast(getParentClassName(T))) };
     Core.objectSetInstance(self.base.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
     Core.objectSetInstanceBinding(self.base.godot_object, Core.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
+    if (@hasDecl(T, "init")) {
+        self.init();
+    }
     return self;
 }
 

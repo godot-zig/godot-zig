@@ -159,6 +159,9 @@ pub fn init() Self {
     Godot.variantNewNil(&result);
     return result;
 }
+pub fn deinit(self: *Self) void {
+    Godot.variantDestroy(&self.value);
+}
 pub fn initFrom(from: anytype) Self {
     if (@TypeOf(from) == Self) return from;
     const tid = comptime getVariantType(@TypeOf(from));

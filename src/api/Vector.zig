@@ -56,6 +56,10 @@ pub fn VecMethods(comptime T: type, comptime N: u8, comptime Self: type) type {
             return @reduce(.Add, self.asSimd() * self.asSimd());
         }
 
+        pub fn dot(self: Self, other: Self) T {
+            return @reduce(.Add, self.asSimd() * other.asSimd());
+        }
+
         pub fn norm(self: Self) Self {
             return self.scale(1 / self.len());
         }
@@ -82,20 +86,38 @@ pub fn VecMethods(comptime T: type, comptime N: u8, comptime Self: type) type {
     };
 }
 
+pub const VectorComponent = enum { x, y, z, w };
+
 pub fn Vec2(comptime T: type) type {
     return extern struct {
         x: T,
         y: T,
 
         const Self = @This();
-        pub fn new(x: T, y: T) Self {
+        const Methods = VecMethods(T, 2, Self);
+
+        pub inline fn new(x: T, y: T) Self {
             return .{
                 .x = x,
                 .y = y,
             };
         }
+        pub inline fn swizzle(self: Self, xc: VectorComponent, yc: VectorComponent) Self {
+            return Methods.fromSimd(@shuffle(T, self.asSimd(), undefined, [2]T{
+                @intFromEnum(xc),
+                @intFromEnum(yc),
+            }));
+        }
 
-        pub usingnamespace VecMethods(T, 2, Self);
+        pub fn cross(self: Self, other: Self) T {
+            return @reduce(.Sub, self.mul(other.swizzle(.y, .x)));
+        }
+
+        pub fn angle(self: Self, other: Self) T {
+            return std.math.atan2(self.cross(other), self.dot(other));
+        }
+
+        pub usingnamespace Methods;
     };
 }
 
@@ -106,6 +128,8 @@ pub fn Vec3(comptime T: type) type {
         z: T,
 
         const Self = @This();
+        const Methods = VecMethods(T, 3, Self);
+
         pub fn new(x: T, y: T, z: T) Self {
             return .{
                 .x = x,
@@ -113,8 +137,24 @@ pub fn Vec3(comptime T: type) type {
                 .z = z,
             };
         }
+        pub inline fn swizzle(self: Self, xc: VectorComponent, yc: VectorComponent, zc: VectorComponent) Self {
+            return Methods.fromSimd(@shuffle(T, self.asSimd(), undefined, [3]T{
+                @intFromEnum(xc),
+                @intFromEnum(yc),
+                @intFromEnum(zc),
+            }));
+        }
 
-        pub usingnamespace VecMethods(T, 3, Self);
+        pub fn cross(self: Self, other: Self) Self {
+            return self.swizzle(.y, .z, .x).mul(other.swizzle(.z, .x, .y))
+                .sub(self.swizzle(.z, .x, .y).mul(other.swizzle(.y, .z, .x)));
+        }
+
+        pub fn angle(self: Self, other: Self) T {
+            return std.math.atan2(self.cross(other).len(), self.dot(other));
+        }
+
+        pub usingnamespace Methods;
     };
 }
 
@@ -126,6 +166,8 @@ pub fn Vec4(comptime T: type) type {
         w: T,
 
         const Self = @This();
+        const Methods = VecMethods(T, 4, Self);
+
         pub fn new(x: T, y: T, z: T, w: T) Self {
             return .{
                 .x = x,
@@ -135,6 +177,15 @@ pub fn Vec4(comptime T: type) type {
             };
         }
 
-        pub usingnamespace VecMethods(T, 4, Self);
+        pub inline fn swizzle(self: Self, xc: VectorComponent, yc: VectorComponent, zc: VectorComponent, wc: VectorComponent) Self {
+            return Methods.fromSimd(@shuffle(T, self.asSimd(), undefined, [4]T{
+                @intFromEnum(xc),
+                @intFromEnum(yc),
+                @intFromEnum(zc),
+                @intFromEnum(wc),
+            }));
+        }
+
+        pub usingnamespace Methods;
     };
 }
