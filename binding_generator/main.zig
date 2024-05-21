@@ -886,11 +886,8 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
         }
     }
 
-    try code_builder.writeLine(0, "pub var general_allocator: std.mem.Allocator = undefined;");
-    try code_builder.writeLine(0, "pub var arena_allocator: std.mem.Allocator = undefined;");
-    try code_builder.writeLine(0, "var arena: std.heap.ArenaAllocator = undefined;");
     try code_builder.writeLine(0, "pub var p_library: Godot.GDExtensionClassLibraryPtr = null;");
-    try loader_builder.writeLine(0, "pub fn initCore(getProcAddress:std.meta.Child(Godot.GDExtensionInterfaceGetProcAddress), library: Godot.GDExtensionClassLibraryPtr, allocator_: std.mem.Allocator) !void {");
+    try loader_builder.writeLine(0, "pub fn initCore(getProcAddress:std.meta.Child(Godot.GDExtensionInterfaceGetProcAddress), library: Godot.GDExtensionClassLibraryPtr) !void {");
     try loader_builder.writeLine(1, "p_library = library;");
 
     const callback_decl_code =
@@ -920,9 +917,6 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
         }
     }
 
-    try loader_builder.writeLine(1, "general_allocator = allocator_;");
-    try loader_builder.writeLine(1, "arena = std.heap.ArenaAllocator.init(allocator_);");
-    try loader_builder.writeLine(1, "arena_allocator = arena.allocator();");
     try loader_builder.writeLine(1, "Godot.Variant.initBindings();");
 
     for (all_engine_classes.items) |cls| {
@@ -934,7 +928,6 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
     for (all_engine_classes.items) |cls| {
         try loader_builder.printLine(1, "Godot.getClassName({0s}).deinit();", .{cls});
     }
-    try loader_builder.writeLine(1, "arena.deinit();");
 
     try loader_builder.writeLine(0, "}");
     for (all_engine_classes.items) |cls| {

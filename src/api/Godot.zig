@@ -7,6 +7,7 @@ const StringName = Core.StringName;
 const String = Core.String;
 pub usingnamespace Core;
 pub usingnamespace Core.C;
+pub var general_allocator: std.mem.Allocator = undefined;
 
 const builtin = @import("builtin");
 
@@ -64,7 +65,7 @@ pub fn stringToAscii(str: String, buf: []u8) []const u8 {
     return buf[0..@intCast(sz)];
 }
 
-fn getBaseName(str: [:0]const u8) [:0]const u8 {
+fn getBaseName(str: []const u8) []const u8 {
     const pos = std.mem.lastIndexOfScalar(u8, str, '.') orelse return str;
     return str[pos + 1 ..];
 }
@@ -125,9 +126,22 @@ pub fn castSafe(comptime TargetType: type, object: anytype) ?TargetType {
 }
 
 pub fn create(comptime T: type) !*T {
-    const self = try Core.general_allocator.create(T);
+    const self = try general_allocator.create(T);
     self.* = std.mem.zeroInit(T, .{});
     self.base = .{ .godot_object = Core.classdbConstructObject(@ptrCast(getParentClassName(T))) };
+    Core.objectSetInstance(self.base.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
+    Core.objectSetInstanceBinding(self.base.godot_object, Core.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
+    if (@hasDecl(T, "init")) {
+        self.init();
+    }
+    return self;
+}
+
+//for extension reloading
+fn recreate(comptime T: type, obj: ?*anyopaque) !*T {
+    const self = try general_allocator.create(T);
+    self.* = std.mem.zeroInit(T, .{});
+    self.base = .{ .godot_object = obj };
     Core.objectSetInstance(self.base.godot_object, @ptrCast(getClassName(T)), @ptrCast(self));
     Core.objectSetInstanceBinding(self.base.godot_object, Core.p_library, @ptrCast(self), @ptrCast(&dummy_callbacks));
     if (@hasDecl(T, "init")) {
@@ -147,18 +161,22 @@ pub fn destroy(instance: anytype) void {
 
 const PluginCallback = ?*const fn (userdata: ?*anyopaque, p_level: Core.C.GDExtensionInitializationLevel) void;
 
-pub fn registerPlugin(p_get_proc_address: Core.C.GDExtensionInterfaceGetProcAddress, p_library: Core.C.GDExtensionClassLibraryPtr, r_initialization: [*c]Core.C.GDExtensionInitialization, allocator: std.mem.Allocator, comptime plugin_init_cb: PluginCallback, comptime plugin_deinit_cb: PluginCallback) Core.C.GDExtensionBool {
+pub fn registerPlugin(p_get_proc_address: Core.C.GDExtensionInterfaceGetProcAddress, p_library: Core.C.GDExtensionClassLibraryPtr, r_initialization: [*c]Core.C.GDExtensionInitialization, allocator: std.mem.Allocator, plugin_init_cb: PluginCallback, plugin_deinit_cb: PluginCallback) Core.C.GDExtensionBool {
     const T = struct {
-        var init_cb = plugin_init_cb;
-        var deinit_cb = plugin_deinit_cb;
+        var init_cb: PluginCallback = null;
+        var deinit_cb: PluginCallback = null;
         fn initializeLevel(userdata: ?*anyopaque, p_level: Core.C.GDExtensionInitializationLevel) callconv(.C) void {
+            if (p_level == Core.C.GDEXTENSION_INITIALIZATION_SCENE) {
+                init();
+            }
+
             if (init_cb) |cb| {
                 cb(userdata, p_level);
             }
         }
 
         fn deinitializeLevel(userdata: ?*anyopaque, p_level: Core.C.GDExtensionInitializationLevel) callconv(.C) void {
-            if (p_level == Core.C.GDEXTENSION_INITIALIZATION_CORE) {
+            if (p_level == Core.C.GDEXTENSION_INITIALIZATION_SCENE) {
                 deinit();
             }
 
@@ -168,25 +186,27 @@ pub fn registerPlugin(p_get_proc_address: Core.C.GDExtensionInterfaceGetProcAddr
         }
     };
 
+    T.init_cb = plugin_init_cb;
+    T.deinit_cb = plugin_deinit_cb;
     r_initialization.*.initialize = T.initializeLevel;
     r_initialization.*.deinitialize = T.deinitializeLevel;
     r_initialization.*.minimum_initialization_level = Core.C.GDEXTENSION_INITIALIZATION_SCENE;
-
-    init(p_get_proc_address.?, p_library, allocator) catch unreachable;
-
+    general_allocator = allocator;
+    Core.initCore(p_get_proc_address.?, p_library) catch unreachable;
     return 1;
 }
 
 var registered_classes: std.StringHashMap(bool) = undefined;
 pub fn registerClass(comptime T: type) void {
+    const class_name = getBaseName(@typeName(T));
     //prevent duplicate registration
-    if (registered_classes.contains(@typeName(T))) return;
-    registered_classes.put(@typeName(T), true) catch unreachable;
+    if (registered_classes.contains(class_name)) return;
+    registered_classes.put(class_name, true) catch unreachable;
 
     const P = std.meta.FieldType(T, .base);
-    const parent_class_name: [:0]const u8 = comptime getBaseName(@typeName(P));
-    getParentClassName(T).* = StringName.initFromLatin1Chars(parent_class_name);
-    getClassName(T).* = StringName.initFromLatin1Chars(getBaseName(@typeName(T)));
+    const parent_class_name = comptime getBaseName(@typeName(P));
+    getParentClassName(T).* = StringName.initFromUtf8Chars(parent_class_name);
+    getClassName(T).* = StringName.initFromUtf8Chars(class_name);
 
     const PerClassData = struct {
         pub var class_info = init_blk: {
@@ -212,6 +232,7 @@ pub fn registerClass(comptime T: type) void {
                 .unreference_func = null,
                 .create_instance_func = create_instance_bind, // (Default) constructor; mandatory. If the class is not instantiable, consider making it virtual or abstract.
                 .free_instance_func = free_instance_bind, // Destructor; mandatory.
+                .recreate_instance_func = recreate_instance_bind,
                 .get_virtual_func = get_virtual_bind, // Queries a virtual function by name and returns a callback to invoke the requested virtual function.
                 .get_virtual_call_data_func = null,
                 .call_virtual_with_data_func = null,
@@ -340,11 +361,16 @@ pub fn registerClass(comptime T: type) void {
             const ret = create(T) catch unreachable;
             return @ptrCast(ret.base.godot_object);
         }
+        pub fn recreate_instance_bind(p_class_userdata: ?*anyopaque, p_object: Core.C.GDExtensionObjectPtr) callconv(.C) Core.C.GDExtensionClassInstancePtr {
+            _ = p_class_userdata;
+            const ret = recreate(T, p_object) catch unreachable;
+            return @ptrCast(ret);
+        }
         pub fn free_instance_bind(p_userdata: ?*anyopaque, p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) void {
             if (@hasDecl(T, "deinit")) {
                 @as(*T, @ptrCast(@alignCast(p_instance))).deinit();
             }
-            Core.general_allocator.destroy(@as(*T, @ptrCast(@alignCast(p_instance))));
+            general_allocator.destroy(@as(*T, @ptrCast(@alignCast(p_instance))));
             _ = p_userdata;
         }
         pub fn get_virtual_bind(p_userdata: ?*anyopaque, p_name: Core.C.GDExtensionConstStringNamePtr) callconv(.C) Core.C.GDExtensionClassCallVirtual {
@@ -461,8 +487,11 @@ pub fn MethodBinderT(comptime MethodType: type) type {
 var registered_methods: std.StringHashMap(bool) = undefined;
 pub fn registerMethod(comptime T: type, comptime name: [:0]const u8) void {
     //prevent duplicate registration
-    const fullname = std.mem.concat(Core.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", name }) catch unreachable;
-    if (registered_methods.contains(fullname)) return;
+    const fullname = std.mem.concat(general_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", name }) catch unreachable;
+    if (registered_methods.contains(fullname)) {
+        general_allocator.free(fullname);
+        return;
+    }
     registered_methods.put(fullname, true) catch unreachable;
 
     const p_method = @field(T, name);
@@ -514,8 +543,11 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8) void {
 var registered_signals: std.StringHashMap(bool) = undefined;
 pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, arguments: []const PropertyInfo) void {
     //prevent duplicate registration
-    const fullname = std.mem.concat(Core.arena_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", signal_name }) catch unreachable;
-    if (registered_signals.contains(fullname)) return;
+    const fullname = std.mem.concat(general_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", signal_name }) catch unreachable;
+    if (registered_signals.contains(fullname)) {
+        general_allocator.free(fullname);
+        return;
+    }
     registered_signals.put(fullname, true) catch unreachable;
 
     var propertyies: [32]Core.C.GDExtensionPropertyInfo = undefined;
@@ -548,15 +580,29 @@ pub fn connect(godot_object: anytype, signal_name: [:0]const u8, instance: anyty
     _ = godot_object.connect(signal_name, callable, 0);
 }
 
-pub fn init(getProcAddress: std.meta.Child(Core.C.GDExtensionInterfaceGetProcAddress), library: Core.C.GDExtensionClassLibraryPtr, allocator_: std.mem.Allocator) !void {
-    registered_classes = std.StringHashMap(bool).init(allocator_);
-    registered_methods = std.StringHashMap(bool).init(allocator_);
-    registered_signals = std.StringHashMap(bool).init(allocator_);
-    return Core.initCore(getProcAddress, library, allocator_);
+pub fn init() void {
+    registered_classes = std.StringHashMap(bool).init(general_allocator);
+    registered_methods = std.StringHashMap(bool).init(general_allocator);
+    registered_signals = std.StringHashMap(bool).init(general_allocator);
 }
 
 pub fn deinit() void {
-    Core.deinitCore();
+    var key_iter = registered_classes.keyIterator();
+    while (key_iter.next()) |it| {
+        var class_name = StringName.initFromUtf8Chars(it.*);
+        Core.classdbUnregisterExtensionClass(Core.p_library, @ptrCast(&class_name));
+    }
+
+    var key_iter1 = registered_methods.keyIterator();
+    while (key_iter1.next()) |it| {
+        general_allocator.free(it.*);
+    }
+
+    var key_iter2 = registered_signals.keyIterator();
+    while (key_iter2.next()) |it| {
+        general_allocator.free(it.*);
+    }
+    //Core.deinitCore();
     registered_signals.deinit();
     registered_methods.deinit();
     registered_classes.deinit();
