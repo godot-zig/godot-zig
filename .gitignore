@@ -1,6 +1,6 @@
 .vscode
 .DS_Store
-zig-cache
+.zig-cache
 zig-out
 gen
 project/lib/
