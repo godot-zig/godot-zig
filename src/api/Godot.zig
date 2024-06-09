@@ -6,7 +6,7 @@ const StringName = Core.StringName;
 const String = Core.String;
 pub usingnamespace Core;
 pub usingnamespace Core.C;
-pub var general_allocator: std.mem.Allocator = undefined;
+var general_allocator: std.mem.Allocator = undefined;
 
 const builtin = @import("builtin");
 
@@ -191,7 +191,7 @@ pub fn registerPlugin(p_get_proc_address: Core.C.GDExtensionInterfaceGetProcAddr
     r_initialization.*.deinitialize = T.deinitializeLevel;
     r_initialization.*.minimum_initialization_level = Core.C.GDEXTENSION_INITIALIZATION_SCENE;
     general_allocator = allocator;
-    Core.initCore(p_get_proc_address.?, p_library) catch unreachable;
+    Core.initCore(p_get_proc_address.?, p_library, general_allocator) catch unreachable;
     return 1;
 }
 
