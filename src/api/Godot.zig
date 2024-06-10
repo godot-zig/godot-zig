@@ -533,9 +533,11 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8, default_arg
     var defaultArgumentsPtr: [len]*Variant = undefined;
     var defaultArguments = general_allocator.alloc(Variant, len) catch unreachable;
     inline for (default_args, 0..) |v, i| {
-        var variant = Variant.initFrom(v);
-        defaultArgumentsPtr[i] = &variant;
-        defaultArguments[i] = variant;
+        if (@typeInfo(@TypeOf(v)) != .Null) {
+            var variant = Variant.initFrom(v);
+            defaultArgumentsPtr[i] = &variant;
+            defaultArguments[i] = variant;
+        }
     }
     registered_default_arguments.put(fullname, defaultArguments) catch unreachable;
 
