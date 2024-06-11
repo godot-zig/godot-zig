@@ -488,7 +488,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
 
 var registered_default_arguments: std.StringHashMap([]Variant) = undefined;
 var registered_methods: std.StringHashMap(bool) = undefined;
-pub fn registerMethod(comptime T: type, comptime name: [:0]const u8, default_args: anytype) void {
+pub fn registerMethod(comptime T: type, comptime name: [:0]const u8, args_name: anytype, default_args: anytype) void {
     //prevent duplicate registration
     const fullname = std.mem.concat(general_allocator, u8, &[_][]const u8{ getBaseName(@typeName(T)), "::", name }) catch unreachable;
     if (registered_methods.contains(fullname)) {
@@ -506,7 +506,17 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8, default_arg
         if (default_args_type_info != .Struct) {
             @compileError("expected tuple or struct argument, found " ++ @typeName(DefaultArgsType));
         }
+        const ArgsNameType = @TypeOf(args_name);
+        const args_name_type_info = @typeInfo(ArgsNameType);
+        if (args_name_type_info != .Struct) {
+            @compileError("expected tuple or struct argument, found " ++ @typeName(ArgsNameType));
+        }
         const default_args_fields = default_args_type_info.Struct.fields;
+        if (args_name.len > 0) {
+            if (args_name.len != MethodBinder.ArgCount - 1) {
+                @compileError("Cannot have mandatory parameters after optional parameters.");
+            }
+        }
         if (default_args_fields.len > 0) {
             if (default_args_fields.len != MethodBinder.ArgCount - 1) {
                 @compileError("Cannot have mandatory parameters after optional parameters.");
@@ -553,10 +563,11 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8, default_arg
     };
     MethodBinder.default_args = defaultArguments[0..];
 
+    const has_args_name = args_name.len > 0;
     inline for (1..MethodBinder.ArgCount) |i| {
         MethodBinder.arg_properties[i] = Core.C.GDExtensionPropertyInfo{
             .type = @intCast(Variant.getVariantType(MethodBinder.ArgsTuple[i].type)),
-            .name = @ptrCast(@constCast(&StringName.init())),
+            .name = @ptrCast(@constCast(if (has_args_name) &StringName.initFromLatin1Chars(args_name[i-1]) else &StringName.init())),
             .class_name = getClassName(MethodBinder.ArgsTuple[i].type),
             .hint = Core.GlobalEnums.PROPERTY_HINT_NONE,
             .hint_string = @ptrCast(@constCast(&String.init())),
@@ -620,7 +631,7 @@ pub fn connect(godot_object: anytype, signal_name: [:0]const u8, instance: anyty
     if (@typeInfo(@TypeOf(instance)) != .Pointer) {
         @compileError("pointer type expected for parameter 'instance'");
     }
-    registerMethod(std.meta.Child(@TypeOf(instance)), method_name, .{});
+    registerMethod(std.meta.Child(@TypeOf(instance)), method_name, .{}, .{});
     const callable = Core.Callable.initFromObjectStringName(instance, method_name);
     _ = godot_object.connect(signal_name, callable, 0);
 }
