@@ -521,20 +521,11 @@ pub fn registerMethod(comptime T: type, comptime name: [:0]const u8, args_name: 
             if (default_args_fields.len != MethodBinder.ArgCount - 1) {
                 @compileError("Cannot have mandatory parameters after optional parameters.");
             }
-            var default_used = false;
             for (0..default_args_fields.len) |i| {
                 const args_field_type = default_args_fields[i].type;
-                if (@typeInfo(args_field_type) != .Null) {
-                    default_used = true;
-
-                    const args_tuple_type: type = MethodBinder.ArgsTuple[i + 1].type;
-                    if (args_tuple_type != args_field_type) {
-                        @compileError(std.fmt.comptimePrint("Invalid argument for \"{s}()\" function: argument {d} should be \"{any}\" but is \"{any}\".", .{ name, i, args_tuple_type, args_field_type }));
-                    }
-                } else {
-                    if (default_used) {
-                        @compileError("Cannot have mandatory parameters after optional parameters.");
-                    }
+                const args_tuple_type: type = MethodBinder.ArgsTuple[i + 1].type;
+                if (args_tuple_type != args_field_type) {
+                    @compileError(std.fmt.comptimePrint("Invalid argument for \"{s}()\" function: argument {d} should be \"{any}\" but is \"{any}\".", .{ name, i, args_tuple_type, args_field_type }));
                 }
             }
         }
