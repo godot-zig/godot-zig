@@ -618,11 +618,11 @@ pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, argu
     }
 }
 
-pub fn connect(godot_object: anytype, signal_name: [:0]const u8, instance: anytype, comptime method_name: [:0]const u8) void {
+pub fn connect(godot_object: anytype, signal_name: [:0]const u8, instance: anytype, comptime method_name: [:0]const u8, args_name: anytype, default_args: anytype) void {
     if (@typeInfo(@TypeOf(instance)) != .Pointer) {
         @compileError("pointer type expected for parameter 'instance'");
     }
-    registerMethod(std.meta.Child(@TypeOf(instance)), method_name, .{}, .{});
+    registerMethod(std.meta.Child(@TypeOf(instance)), method_name, args_name, default_args);
     const callable = Core.Callable.initFromObjectStringName(instance, method_name);
     _ = godot_object.connect(signal_name, callable, 0);
 }
