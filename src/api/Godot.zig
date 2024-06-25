@@ -465,7 +465,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
                 if (ReturnType == void or ReturnType == null) {
                     @call(.auto, method, .{});
                 } else {
-                    @as(*ReturnType.?, @ptrCast(p_return)).* = @call(.auto, method, .{});
+                    @as(*ReturnType.?, @ptrCast(@alignCast(p_return))).* = @call(.auto, method, .{});
                 }
             } else {
                 var args: std.meta.ArgsTuple(MethodType) = undefined;
@@ -476,7 +476,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
                 if (ReturnType == void or ReturnType == null) {
                     @call(.auto, method, args);
                 } else {
-                    @as(*ReturnType.?, @ptrCast(p_return)).* = @call(.auto, method, args);
+                    @as(*ReturnType.?, @ptrCast(@alignCast(p_return))).* = @call(.auto, method, args);
                 }
             }
         }
