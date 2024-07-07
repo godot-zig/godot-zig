@@ -56,6 +56,7 @@ pub fn build(b: *std.Build) void {
 
     const build_options = b.addOptions();
     build_options.addOption([]const u8, "precision", precision);
+    build_options.addOption([]const u8, "export_path", export_path);
     lib.root_module.addOptions("build_options", build_options);
     lib.addIncludePath(b.path(export_path));
     lib.step.dependOn(bind_step);
