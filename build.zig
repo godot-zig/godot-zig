@@ -40,6 +40,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    _ = b.addModule("godot", .{
+        .root_source_file = b.path(b.pathJoin(&.{ "src", "api", "Godot.zig" })),
+        .target = target,
+        .optimize = optimize,
+    });
     const core_module = b.addModule("GodotCore", .{
         .root_source_file = b.path(b.pathJoin(&.{ api_path, "GodotCore.zig" })),
         .target = target,
