@@ -20,9 +20,11 @@ pub fn build(b: *std.Build) void {
     const dump_step = b.step("dump", "dump api");
     dump_step.dependOn(&dump_cmd.step);
 
+    const binding_generator_step = b.step("binding_generator", "build the binding generator program");
     const binding_generator = b.addExecutable(.{ .name = "binding_generator", .target = target, .optimize = optimize, .root_source_file = b.path(b.pathJoin(&.{ "binding_generator", "main.zig" })), .link_libc = true });
     binding_generator.step.dependOn(dump_step);
     binding_generator.addIncludePath(b.path(export_path));
+    binding_generator_step.dependOn(&binding_generator.step);
     _ = b.installArtifact(binding_generator);
 
     const generate_binding = std.Build.Step.Run.create(b, "bind_godot");
@@ -31,6 +33,28 @@ pub fn build(b: *std.Build) void {
 
     const bind_step = b.step("bind", "generate godot bindings");
     bind_step.dependOn(&generate_binding.step);
+
+    const lib = b.addSharedLibrary(.{
+        .name = "godot",
+        .root_source_file = b.path(b.pathJoin(&.{ "src", "api", "Godot.zig" })),
+        .target = target,
+        .optimize = optimize,
+    });
+    const core_module = b.addModule("GodotCore", .{
+        .root_source_file = b.path(b.pathJoin(&.{ api_path, "GodotCore.zig" })),
+        .target = target,
+        .optimize = optimize,
+    });
+    core_module.addIncludePath(b.path(export_path));
+    core_module.addImport("godot", &lib.root_module);
+    lib.root_module.addImport("GodotCore", core_module);
+
+    const build_options = b.addOptions();
+    build_options.addOption([]const u8, "precision", precision);
+    lib.root_module.addOptions("build_options", build_options);
+    lib.addIncludePath(b.path(export_path));
+    lib.step.dependOn(bind_step);
+    b.installArtifact(lib);
 }
 
 pub fn createModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, godot_path: []const u8) *std.Build.Module {
