@@ -74,7 +74,7 @@ const SIZE_OFFSET: usize = 0;
 const ELEMENT_OFFSET = if ((SIZE_OFFSET + @sizeOf(u64)) % @alignOf(u64) == 0) (SIZE_OFFSET + @sizeOf(u64)) else ((SIZE_OFFSET + @sizeOf(u64)) + @alignOf(u64) - ((SIZE_OFFSET + @sizeOf(u64)) % @alignOf(u64)));
 const DATA_OFFSET = if ((ELEMENT_OFFSET + @sizeOf(u64)) % @alignOf(max_align_t) == 0) (ELEMENT_OFFSET + @sizeOf(u64)) else ((ELEMENT_OFFSET + @sizeOf(u64)) + @alignOf(max_align_t) - ((ELEMENT_OFFSET + @sizeOf(u64)) % @alignOf(max_align_t)));
 
-pub fn alloc(size: u32) ?*u8 {
+pub fn alloc(size: u32) ?[*]u8 {
     if (@import("builtin").mode == .Debug) {
         const p = @as([*c]u8, @ptrCast(Core.memAlloc(size)));
         return p;
