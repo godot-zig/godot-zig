@@ -5,17 +5,10 @@ Features are being gradually added to meet the needs of a demo game.
 Bugs and missing features are expected until a stable version finally released.  
 Issue report, feature request and pull request are all welcome.
 
-## Branches
+## Prerequisites
 
-### master:
-
-1. zig nightly
-2. godot nightly
-
-### stable:
-
-1. zig 0.12.\*
-2. godot 4.2.\*
+1. zig 0.13
+2. godot 4.3
 
 ## Usage:
 
@@ -28,9 +21,9 @@ const std = @import("std");
 const Godot = @import("godot");
 const Vec2 = Godot.Vector2;
 const Self = @This();
-
-pub usingnamespace Godot.Control;
-base: Godot.Control,
+const Base = Godot.Control;
+pub usingnamespace Base;
+base: Base,
 
 sprite: Godot.Sprite2D,
 
