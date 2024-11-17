@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
     const binding_generator = b.addExecutable(.{ .name = "binding_generator", .target = target, .optimize = optimize, .root_source_file = b.path(b.pathJoin(&.{ "binding_generator", "main.zig" })), .link_libc = true });
     binding_generator.step.dependOn(dump_step);
     binding_generator.addIncludePath(b.path(export_path));
-    binding_generator.addIncludePath(b.path(b.pathJoin(&.{ thisDir(b.allocator), "src", "api" })));
+    binding_generator.addIncludePath(b.path(api_path));
     binding_generator_step.dependOn(&binding_generator.step);
     _ = b.installArtifact(binding_generator);
 
