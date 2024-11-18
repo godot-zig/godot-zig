@@ -64,6 +64,7 @@ pub fn build(b: *std.Build) !void {
     build_options.addOption([]const u8, "precision", precision);
     build_options.addOption([]const u8, "headers", headers);
     lib.root_module.addOptions("build_options", build_options);
+    godot_module.addOptions("build_options", build_options);
     lib.step.dependOn(bindgen.step);
     b.installArtifact(lib);
 }
