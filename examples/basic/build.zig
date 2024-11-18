@@ -25,9 +25,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .target = target,
     });
-    const godot_module = godot.module("GodotCore");
-    const godot_core_module = godot.module("GodotCore");
-    godot_module.addImport("GodotCore", godot_core_module);
+    const godot_module = godot.module("godot");
+    //const godot_core_module = godot.module("GodotCore");
+    //godot_module.addImport("GodotCore", godot_core_module);
     dylib.root_module.addImport("godot", godot_module);
     //dylib.root_module.addImport("GodotCore", godot_core_module);
 

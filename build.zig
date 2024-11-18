@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const BINDGEN_INSTALL_RELPATH = "bindgen";
+
 pub fn build(b: *std.Build) !void {
     //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     //defer _ = gpa.deinit();
@@ -16,8 +18,7 @@ pub fn build(b: *std.Build) !void {
         "Where to source Godot header files. [options: GENERATED, VENDORED, <dir_path>] [default: GENERATED]",
     ) orelse "GENERATED";
 
-    const bindgen_path = b.makeTempPath();
-    const dump_step = try build_dump_step(b, godot_path, headers, bindgen_path);
+    const gdextension = build_gdextension(b, godot_path, headers);
     const binding_generator_step = b.step("binding_generator", "Build the binding_generator program");
     const binding_generator = b.addExecutable(.{
         .name = "binding_generator",
@@ -26,13 +27,12 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path(b.pathJoin(&.{ "binding_generator", "main.zig" })),
         .link_libc = true,
     });
-    binding_generator.step.dependOn(dump_step);
-    binding_generator.addIncludePath(.{ .cwd_relative = bindgen_path });
+    binding_generator.step.dependOn(gdextension.step);
+    binding_generator.addIncludePath(gdextension.iface_headers.dirname());
     binding_generator_step.dependOn(&binding_generator.step);
     b.installArtifact(binding_generator);
 
-    const bindgen_step = build_bindgen_step(b, binding_generator, bindgen_path, precision, arch);
-    bindgen_step.dependOn(binding_generator_step);
+    const bindgen = build_bindgen(b, gdextension.iface_headers.dirname(), binding_generator, precision, arch);
 
     const lib = b.addSharedLibrary(.{
         .name = "godot",
@@ -40,103 +40,137 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
-    _ = b.addModule("godot", .{
+    const godot_module = b.addModule("godot", .{
         .root_source_file = b.path(b.pathJoin(&.{ "src", "api", "Godot.zig" })),
         .target = target,
         .optimize = optimize,
     });
-    const core_module = b.addModule("GodotCore", .{
-        .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ bindgen_path, "GodotCore.zig" }) },
+    godot_module.addAnonymousImport("GodotCore", .{
+        .root_source_file = bindgen.godot_core_path,
+        .link_libc = true,
+        .optimize = optimize,
+        .target = target,
+    });
+    godot_module.addIncludePath(bindgen.output_path);
+    godot_module.addIncludePath(gdextension.iface_headers.dirname());
+    const godot_core_module = b.addModule("GodotCore", .{
+        .root_source_file = bindgen.godot_core_path,
         .target = target,
         .optimize = optimize,
     });
-    core_module.addIncludePath(.{ .cwd_relative = bindgen_path });
-    core_module.addImport("godot", &lib.root_module);
-    lib.root_module.addImport("GodotCore", core_module);
+    godot_core_module.addIncludePath(gdextension.iface_headers.dirname());
+    godot_core_module.addImport("godot", godot_module);
+    lib.root_module.addImport("godot", godot_module);
+    godot_module.addImport("GodotCore", godot_core_module);
+    lib.root_module.addImport("GodotCore", godot_core_module);
 
     const build_options = b.addOptions();
     build_options.addOption([]const u8, "precision", precision);
     build_options.addOption([]const u8, "headers", headers);
     lib.root_module.addOptions("build_options", build_options);
-    lib.addIncludePath(.{ .cwd_relative = bindgen_path });
-    lib.step.dependOn(bindgen_step);
+    //lib.addIncludePath(bindgen.output_path);
+    //lib.addIncludePath(gdextension.iface_headers.dirname());
+    lib.step.dependOn(bindgen.step);
     b.installArtifact(lib);
 }
 
-fn build_bindgen_step(
+const BindgenOutput = struct {
+    step: *std.Build.Step,
+    godot_core_path: std.Build.LazyPath,
+    output_path: std.Build.LazyPath,
+};
+
+/// Build the zig bindings using the binding_generator program,
+fn build_bindgen(
     b: *std.Build,
+    godot_headers_path: std.Build.LazyPath,
     binding_generator: *std.Build.Step.Compile,
-    bindgen_path: []const u8,
     precision: []const u8,
     arch: []const u8,
-) *std.Build.Step {
+) BindgenOutput {
     const bind_step = b.step("bindgen", "Generate godot bindings");
-    const generate_binding = std.Build.Step.Run.create(b, "bind_godot");
+    const run_binding_generator = std.Build.Step.Run.create(b, "run_binding_generator");
     const output_path = b.makeTempPath();
-    //const export_path = b.makeTempPath();
-    generate_binding.addArtifactArg(binding_generator);
-    //const exe = b.getInstallPath(.bin, "binding_generator");
-    generate_binding.addArgs(&.{ bindgen_path, output_path, precision, arch });
-    //const install_binding = b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = export_path }, .install_dir = .prefix, .install_subdir = "api" });
-    //install_binding.step.dependOn(&generate_binding.step);
-    //bind_step.dependOn(&install_binding.step);
-    const mv_cmd = b.addSystemCommand(&.{
-        //"mv", b.pathJoin(&.{ output_path, "*.zig" }), bindgen_path,
-        "bash", "-c", b.fmt("mv {s}/*.zig {s}", .{ output_path, bindgen_path }),
+    run_binding_generator.addArtifactArg(binding_generator);
+    run_binding_generator.addDirectoryArg(godot_headers_path);
+    const output_lazypath = run_binding_generator.addOutputDirectoryArg(output_path);
+    run_binding_generator.addArgs(&.{ precision, arch });
+    //const mv_cmd = b.addSystemCommand(&.{
+    //    //"mv", b.pathJoin(&.{ output_path, "*.zig" }), bindgen_path,
+    //    "bash", "-c", b.fmt("cp {s}/*.zig {s}", .{ output_path, bindgen_path }),
+    //});
+    //mv_cmd.step.dependOn(&run_binding_generator.step);
+    const install_bindgen = b.addInstallDirectory(.{
+        .source_dir = output_lazypath,
+        .install_dir = .prefix,
+        .install_subdir = BINDGEN_INSTALL_RELPATH,
     });
-    mv_cmd.step.dependOn(&generate_binding.step);
-    bind_step.dependOn(&mv_cmd.step);
-    return bind_step;
+    bind_step.dependOn(&install_bindgen.step);
+    return .{
+        .step = bind_step,
+        .output_path = output_lazypath,
+        .godot_core_path = output_lazypath.path(b, "GodotCore.zig"),
+    };
 }
 
-fn build_dump_step(
+const GDExtensionOutput = struct {
+    step: *std.Build.Step,
+    api_json: std.Build.LazyPath,
+    iface_headers: std.Build.LazyPath,
+};
+
+/// Dump the Godot headers and interface files to the bindgen_path.
+fn build_gdextension(
     b: *std.Build,
     godot_path: []const u8,
     headers_option: []const u8,
-    bindgen_path: []const u8,
-) !*std.Build.Step {
+) GDExtensionOutput {
     const dump_step = b.step("dump", "dump godot headers");
     //const tmpdir = b.makeTempPath();
+    var iface_headers: std.Build.LazyPath = undefined;
+    var api_json: std.Build.LazyPath = undefined;
     if (std.mem.eql(u8, headers_option, "VENDORED")) {
-        const vendor_json = std.Build.LazyPath{ .src_path = .{ .owner = b, .sub_path = b.pathJoin(&.{ "vendor", "extension_api.json" }) } };
-        const vendor_h = std.Build.LazyPath{ .src_path = .{ .owner = b, .sub_path = b.pathJoin(&.{ "vendor", "gdextension_interface.h" }) } };
-        const copy_to_bindgen = b.addSystemCommand(&.{
-            "cp", vendor_json.getPath2(b, dump_step), vendor_h.getPath2(b, dump_step), bindgen_path,
-        });
-        dump_step.dependOn(&copy_to_bindgen.step);
-        const api_json = b.addInstallFile(vendor_json, b.pathJoin(&.{ "api", "extension_api.json" }));
-        dump_step.dependOn(&api_json.step);
-        const iface_headers = b.addInstallFile(vendor_h, b.pathJoin(&.{ "api", "gdextension_interface.h" }));
-        dump_step.dependOn(&iface_headers.step);
+        const vendor_path = b.path("vendor");
+        const vendor_json = b.addInstallFile(vendor_path, "extension_api.json");
+        const vendor_h = b.addInstallFile(vendor_path, "gdextension_interface.h");
+        iface_headers = vendor_h.source;
+        api_json = vendor_json.source;
+        dump_step.dependOn(&vendor_h.step);
+        dump_step.dependOn(&vendor_json.step);
     } else if (std.mem.eql(u8, headers_option, "GENERATED")) {
-        const output_dir = b.addInstallDirectory(.{
-            .source_dir = .{ .cwd_relative = bindgen_path },
-            .install_dir = .prefix,
-            .install_subdir = "api",
-        });
+        const tmpdir = b.makeTempPath();
         const dump_cmd = b.addSystemCommand(&.{
             godot_path, "--dump-extension-api", "--dump-gdextension-interface", "--headless",
         });
-        dump_cmd.setCwd(.{ .cwd_relative = bindgen_path });
+        dump_cmd.setCwd(.{ .cwd_relative = tmpdir });
+        const output_dir = b.addInstallDirectory(.{
+            .source_dir = .{ .cwd_relative = tmpdir },
+            .install_dir = .prefix,
+            .install_subdir = BINDGEN_INSTALL_RELPATH,
+        });
         output_dir.step.dependOn(&dump_cmd.step);
         dump_step.dependOn(&output_dir.step);
+        iface_headers = output_dir.options.source_dir.path(b, "gdextension_interface.h");
+        api_json = output_dir.options.source_dir.path(b, "extension_api.json");
     } else {
         const custom_json = b.pathJoin(&.{ headers_option, "extension_api.json" });
         const custom_h = b.pathJoin(&.{ headers_option, "gdextension_interface.h" });
-        const copy_to_bindgen = b.addSystemCommand(&.{
-            "cp", custom_json, custom_h, bindgen_path,
-        });
-        dump_step.dependOn(&copy_to_bindgen.step);
-        const iface_headers = b.addInstallFile(
+        const install_iface_headers = b.addInstallFile(
             .{ .cwd_relative = custom_json },
-            b.pathJoin(&.{ "api", "extension_api.json" }),
+            b.pathJoin(&.{ BINDGEN_INSTALL_RELPATH, "extension_api.json" }),
         );
-        dump_step.dependOn(&iface_headers.step);
-        const api_json = b.addInstallFile(
+        dump_step.dependOn(&install_iface_headers.step);
+        iface_headers = install_iface_headers.source;
+        const install_api_json = b.addInstallFile(
             .{ .cwd_relative = custom_h },
-            b.pathJoin(&.{ "api", "gdextension_interface.h" }),
+            b.pathJoin(&.{ BINDGEN_INSTALL_RELPATH, "gdextension_interface.h" }),
         );
-        dump_step.dependOn(&api_json.step);
+        dump_step.dependOn(&install_api_json.step);
+        api_json = install_api_json.source;
     }
-    return dump_step;
+    return GDExtensionOutput{
+        .step = dump_step,
+        .api_json = api_json,
+        .iface_headers = iface_headers,
+    };
 }
