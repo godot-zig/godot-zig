@@ -6,11 +6,5 @@
 script = ExtResource("1_6gvlp")
 
 [node name="ExampleNode" type="ExampleNode" parent="."]
-_import_path = NodePath("")
-unique_name_in_owner = false
-process_mode = 0
-process_priority = 0
-process_physics_priority = 0
-process_thread_group = 0
-editor_description = ""
-script = null
+Property1 = Vector3(111, 111, 111)
+Property2 = Vector3(222, 222, 222)

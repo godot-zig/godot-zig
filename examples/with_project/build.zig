@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const dylib = b.addSharedLibrary(.{
-        .name = "basic",
+        .name = "example",
         .root_source_file = b.path("src/Entry.zig"),
         .target = target,
         .optimize = optimize,
@@ -31,15 +31,19 @@ pub fn build(b: *std.Build) void {
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
+    b.install_prefix = "./project";
+    b.lib_dir = "./project/lib";
+    b.exe_dir = "./project/lib";
     b.installArtifact(dylib);
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
+        .root_source_file = b.path("src/Entry.zig"),
         .target = target,
         .optimize = optimize,
     });
+    lib_unit_tests.root_module.addImport("godot", godot_module);
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
