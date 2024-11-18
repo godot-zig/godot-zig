@@ -26,10 +26,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     const godot_module = godot.module("godot");
-    //const godot_core_module = godot.module("GodotCore");
-    //godot_module.addImport("GodotCore", godot_core_module);
     dylib.root_module.addImport("godot", godot_module);
-    //dylib.root_module.addImport("GodotCore", godot_core_module);
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when

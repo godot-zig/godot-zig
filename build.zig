@@ -3,10 +3,6 @@ const std = @import("std");
 const BINDGEN_INSTALL_RELPATH = "bindgen";
 
 pub fn build(b: *std.Build) !void {
-    //var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    //defer _ = gpa.deinit();
-    //const alloc = gpa.allocator();
-
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const godot_path = b.option([]const u8, "godot", "Path to Godot engine binary [default: `godot`]") orelse "godot";
@@ -68,8 +64,6 @@ pub fn build(b: *std.Build) !void {
     build_options.addOption([]const u8, "precision", precision);
     build_options.addOption([]const u8, "headers", headers);
     lib.root_module.addOptions("build_options", build_options);
-    //lib.addIncludePath(bindgen.output_path);
-    //lib.addIncludePath(gdextension.iface_headers.dirname());
     lib.step.dependOn(bindgen.step);
     b.installArtifact(lib);
 }
@@ -95,11 +89,6 @@ fn build_bindgen(
     run_binding_generator.addDirectoryArg(godot_headers_path);
     const output_lazypath = run_binding_generator.addOutputDirectoryArg(output_path);
     run_binding_generator.addArgs(&.{ precision, arch });
-    //const mv_cmd = b.addSystemCommand(&.{
-    //    //"mv", b.pathJoin(&.{ output_path, "*.zig" }), bindgen_path,
-    //    "bash", "-c", b.fmt("cp {s}/*.zig {s}", .{ output_path, bindgen_path }),
-    //});
-    //mv_cmd.step.dependOn(&run_binding_generator.step);
     const install_bindgen = b.addInstallDirectory(.{
         .source_dir = output_lazypath,
         .install_dir = .prefix,
@@ -126,7 +115,6 @@ fn build_gdextension(
     headers_option: []const u8,
 ) GDExtensionOutput {
     const dump_step = b.step("dump", "dump godot headers");
-    //const tmpdir = b.makeTempPath();
     var iface_headers: std.Build.LazyPath = undefined;
     var api_json: std.Build.LazyPath = undefined;
     if (std.mem.eql(u8, headers_option, "VENDORED")) {
