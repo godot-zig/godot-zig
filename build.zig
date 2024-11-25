@@ -9,11 +9,11 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const godot_path = b.option([]const u8, "godot_path", "Path to Godot binary [default: `godot`]") orelse "godot";
 
-    const module = try createModule(b, target, optimize, godot_path);
+    const module = createModule(b, target, optimize, godot_path);
     defer _ = module;
 }
 
-pub fn createModule(b: *std.Build, target: ResolvedTarget, optimize: OptimizeMode, godot_path: []const u8) !*Module {
+pub fn createModule(b: *std.Build, target: ResolvedTarget, optimize: OptimizeMode, godot_path: []const u8) *Module {
     const precision = b.option([]const u8, "precision", "Floating point precision, either `float` or `double` [default: `float`]") orelse "float";
     const arch = b.option([]const u8, "arch", "32") orelse "64";
     const gen_path = b.option([]const u8, "output", "Path to save auto-generated files [default: `./gen/api`]") orelse "./gen/api";
