@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://p4prpbgep4um"]
+
+[ext_resource type="Script" path="res://demo/demo.gd" id="1_6gvlp"]
+
+[node name="Demo" type="Node"]
+script = ExtResource("1_6gvlp")
+
+[node name="ExampleNode" type="ExampleNode" parent="."]
+Property1 = Vector3(111, 111, 111)
+Property2 = Vector3(222, 222, 222)

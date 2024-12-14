@@ -1004,5 +1004,6 @@ pub fn main() !void {
 
     try generateGodotCore(allocator);
 
-    std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{ conf, api.value.header.version_full_name });
+    // Disabled this log because it is causing issues with the zig build system
+    //std.log.info("zig bindings with configuration {s} for {s} have been successfully generated, have fun!", .{ conf, api.value.header.version_full_name });
 }
