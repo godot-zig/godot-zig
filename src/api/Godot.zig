@@ -92,10 +92,10 @@ pub fn free(ptr: ?*anyopaque) void {
 
 pub fn getGodotObjectPtr(inst: anytype) *const ?*anyopaque {
     const typeInfo = @typeInfo(@TypeOf(inst));
-    if (typeInfo != .Pointer) {
+    if (typeInfo != .pointer) {
         @compileError("pointer required");
     }
-    const T = typeInfo.Pointer.child;
+    const T = typeInfo.pointer.child;
     if (@hasField(T, "godot_object")) {
         return &inst.godot_object;
     } else if (@hasField(T, "base")) {
@@ -104,7 +104,7 @@ pub fn getGodotObjectPtr(inst: anytype) *const ?*anyopaque {
 }
 
 pub fn cast(comptime T: type, inst: anytype) ?T {
-    if (@typeInfo(@TypeOf(inst)) == .Optional) {
+    if (@typeInfo(@TypeOf(inst)) == .optional) {
         if (inst) |i| {
             return .{ .godot_object = i.godot_object };
         } else {
@@ -394,8 +394,8 @@ pub fn registerClass(comptime T: type) void {
 
 pub fn MethodBinderT(comptime MethodType: type) type {
     return struct {
-        const ReturnType = @typeInfo(MethodType).Fn.return_type;
-        const ArgCount = @typeInfo(MethodType).Fn.params.len;
+        const ReturnType = @typeInfo(MethodType).@"fn".return_type;
+        const ArgCount = @typeInfo(MethodType).@"fn".params.len;
         const ArgsTuple = std.meta.fields(std.meta.ArgsTuple(MethodType));
         var arg_properties: [ArgCount + 1]Core.C.GDExtensionPropertyInfo = undefined;
         var arg_metadata: [ArgCount + 1]Core.C.GDExtensionClassMethodArgumentMetadata = undefined;
@@ -432,7 +432,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
 
         fn ptrToArg(comptime T: type, p_arg: Core.C.GDExtensionConstTypePtr) T {
             switch (@typeInfo(T)) {
-                // .Pointer => |pointer| {
+                // .pointer => |pointer| {
                 //     const ObjectType = pointer.child;
                 //     const ObjectTypeName = comptime getBaseName(@typeName(ObjectType));
                 //     const callbacks = @field(ObjectType, "callbacks_" ++ ObjectTypeName);
@@ -443,7 +443,7 @@ pub fn MethodBinderT(comptime MethodType: type) type {
                 //         return @ptrCast(@alignCast(Core.objectGetInstanceBinding(p_arg, Core.p_library, @ptrCast(&callbacks))));
                 //     }
                 // },
-                .Struct => {
+                .@"struct" => {
                     if (@hasDecl(T, "reference") and @hasDecl(T, "unreference")) { //RefCounted
                         const obj = Core.refGetObject(p_arg);
                         return .{ .godot_object = obj };
@@ -571,7 +571,7 @@ pub fn registerSignal(comptime T: type, comptime signal_name: [:0]const u8, argu
 }
 
 pub fn connect(godot_object: anytype, signal_name: [:0]const u8, instance: anytype, comptime method_name: [:0]const u8) void {
-    if (@typeInfo(@TypeOf(instance)) != .Pointer) {
+    if (@typeInfo(@TypeOf(instance)) != .pointer) {
         @compileError("pointer type expected for parameter 'instance'");
     }
     registerMethod(std.meta.Child(@TypeOf(instance)), method_name);

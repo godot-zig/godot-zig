@@ -128,14 +128,14 @@ fn getByGodotType(comptime T: type) Type {
 fn getChildTypeOrSelf(comptime T: type) type {
     const typeInfo = @typeInfo(T);
     return switch (typeInfo) {
-        .Pointer => |info| info.child,
-        .Optional => |info| info.child,
+        .pointer => |info| info.child,
+        .optional => |info| info.child,
         else => T,
     };
 }
 pub fn getVariantType(comptime T: type) Type {
     const typeInfo = @typeInfo(T);
-    if (typeInfo == .Pointer and @typeInfo(typeInfo.Pointer.child) != .Struct) {
+    if (typeInfo == .pointer and @typeInfo(typeInfo.pointer.child) != .@"struct") {
         @compileError("Init Variant from " ++ @typeName(T) ++ " is not supported");
     }
     const RT = getChildTypeOrSelf(T);
@@ -143,11 +143,11 @@ pub fn getVariantType(comptime T: type) Type {
     const ret = comptime getByGodotType(RT);
     if (ret == Godot.GDEXTENSION_VARIANT_TYPE_NIL) {
         const ret1 = switch (@typeInfo(RT)) {
-            .Struct => Godot.GDEXTENSION_VARIANT_TYPE_OBJECT,
-            .Bool => Godot.GDEXTENSION_VARIANT_TYPE_BOOL,
-            .Int, .ComptimeInt => Godot.GDEXTENSION_VARIANT_TYPE_INT,
-            .Float, .ComptimeFloat => Godot.GDEXTENSION_VARIANT_TYPE_FLOAT,
-            .Void => Godot.GDEXTENSION_VARIANT_TYPE_NIL,
+            .@"struct" => Godot.GDEXTENSION_VARIANT_TYPE_OBJECT,
+            .bool => Godot.GDEXTENSION_VARIANT_TYPE_BOOL,
+            .int, .comptime_int => Godot.GDEXTENSION_VARIANT_TYPE_INT,
+            .float, .comptime_float => Godot.GDEXTENSION_VARIANT_TYPE_FLOAT,
+            .void => Godot.GDEXTENSION_VARIANT_TYPE_NIL,
             else => @compileError("Cannot construct variant from " ++ @typeName(T)),
         };
         return ret1;
@@ -178,7 +178,7 @@ pub fn as(self_const: Self, comptime T: type) T {
         var obj: ?*anyopaque = null;
         to_type[Godot.GDEXTENSION_VARIANT_TYPE_OBJECT].?(@ptrCast(&obj), @ptrCast(&self.value));
         const godotObj: *Godot.Object = @ptrCast(@alignCast(Godot.getObjectInstanceBinding(obj)));
-        const RealType = @typeInfo(T).Pointer.child;
+        const RealType = @typeInfo(T).pointer.child;
         if (RealType == Godot.Object) {
             return godotObj;
         } else {
