@@ -664,14 +664,17 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                     }
                 }
 
-                try vf_builder.printLine(1, "if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(\"{0s}\") == 0 and @hasDecl(T, \"{0s}\")) {{", .{
+                const casecmp_to_func_name = getZigFuncName(allocator, "casecmp_to");
+
+                try vf_builder.printLine(1, "if (@as(*StringName, @ptrCast(@constCast(p_name))).{1s}(\"{0s}\") == 0 and @hasDecl(T, \"{0s}\")) {{", .{
                     func_name,
+                    casecmp_to_func_name,
                 });
 
                 try vf_builder.writeLine(2, "const MethodBinder = struct {");
 
                 try vf_builder.printLine(3, "pub fn {s}(p_instance: Godot.GDExtensionClassInstancePtr, p_args: [*c]const Godot.GDExtensionConstTypePtr, p_ret: Godot.GDExtensionTypePtr) callconv(.C) void {{", .{
-                    zig_func_name,
+                    func_name,
                 });
                 try vf_builder.printLine(4, "const MethodBinder = Godot.MethodBinderT(@TypeOf(T.{s}));", .{
                     func_name,
@@ -704,13 +707,16 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
         }
     }
     if (!is_builtin_class) {
-        const temp_virtual_func_name = std.fmt.allocPrint(allocator, "get_virtual_{s}", .{class_name}) catch unreachable;
+        const temp_virtual_func_name = try std.fmt.allocPrint(allocator, "get_virtual_{s}", .{class_name});
         const virtual_func_name = getZigFuncName(allocator, temp_virtual_func_name);
 
         try code_builder.printLine(0, "pub fn {s}(comptime T:type, p_userdata: ?*anyopaque, p_name: Godot.GDExtensionConstStringNamePtr) Godot.GDExtensionClassCallVirtual {{", .{virtual_func_name});
         try code_builder.writeLine(0, vf_builder.getWritten());
         if (class_node.inherits.len > 0) {
-            try code_builder.printLine(1, "return Godot.{0s}.get_virtual_{0s}(T, p_userdata, p_name);", .{class_node.inherits});
+            const temp_virtual_inherits_func_name = try std.fmt.allocPrint(allocator, "get_virtual_{s}", .{class_node.inherits});
+            const virtual_inherits_func_name = getZigFuncName(allocator, temp_virtual_inherits_func_name);
+
+            try code_builder.printLine(1, "return Godot.{s}.{s}(T, p_userdata, p_name);", .{class_node.inherits, virtual_inherits_func_name});
         } else {
             try code_builder.writeLine(1, "_ = T;");
             try code_builder.writeLine(1, "_ = p_userdata;");
