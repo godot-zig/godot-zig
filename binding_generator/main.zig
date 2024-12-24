@@ -76,6 +76,7 @@ const keywords = std.StaticStringMap(void).initComptime(.{
 const IdentWidth = 4;
 const StringSizeMap = std.StringHashMap(i64);
 const StringBoolMap = std.StringHashMap(bool);
+const StringVoidMap = std.StringHashMap(void);
 const StringStringMap = std.StringHashMap(string);
 
 var class_size_map: StringSizeMap = undefined;
@@ -638,13 +639,11 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
     }
 }
 
-fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.Allocator, comptime is_builtin_class: bool) !void {
+fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.Allocator, comptime is_builtin_class: bool, generated_method_map: *StringVoidMap) !void {
     const class_name = correctName(class_node.name);
     const enum_type_name = getVariantTypeName(class_name);
 
     const proc_type = if (is_builtin_class) ProcType.BuiltinClassMethod else ProcType.EngineClassMethod;
-    var generated_method_map = StringBoolMap.init(allocator);
-    defer generated_method_map.deinit();
 
     var vf_builder = try StreamBuilder(u8, 1024 * 1024).init(allocator);
     defer vf_builder.deinit();
@@ -696,8 +695,11 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                         break :blk "void";
                     }
                 };
-                try generated_method_map.put(func_name, true);
-                try generateProc(code_builder, m, allocator, class_name, func_name, return_type, proc_type);
+
+                if (!generated_method_map.contains(zig_func_name)) {
+                    try generated_method_map.putNoClobber(zig_func_name, {});
+                    try generateProc(code_builder, m, allocator, class_name, func_name, return_type, proc_type);
+                }
             }
         }
     }
@@ -726,6 +728,8 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                 const getter_name = getZigFuncName(allocator, temp_getter_name);
 
                 if (!generated_method_map.contains(getter_name)) {
+                    try generated_method_map.putNoClobber(getter_name, {});
+
                     try code_builder.printLine(0, "pub fn {s}(self: Self) {s} {{", .{ getter_name, member_type });
                     try code_builder.printLine(1, "var result:{s} = undefined;", .{member_type});
 
@@ -745,6 +749,8 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                 const setter_name = getZigFuncName(allocator, temp_setter_name);
 
                 if (!generated_method_map.contains(setter_name)) {
+                    try generated_method_map.putNoClobber(setter_name, {});
+
                     try code_builder.printLine(0, "pub fn {s}(self: *Self, v: {s}) void {{", .{ setter_name, member_type });
 
                     try code_builder.writeLine(1, "const Binding = struct{ pub var method:Godot.GDExtensionPtrSetter = null; };");
@@ -898,6 +904,8 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             }
         }
 
+        var generated_method_map = StringVoidMap.init(allocator);
+
         if (isSingleton(class_name)) {
             const singleton_code =
                 \\var instance: ?{0s} = null;
@@ -910,11 +918,12 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 \\}}
             ;
             try code_builder.printLine(0, singleton_code, .{class_name});
+            try generated_method_map.putNoClobber("getSingleton", {});
         }
 
         if (hasAnyMethod(bc)) {
             try generateConstructor(bc, code_builder, allocator);
-            try generateMethod(bc, code_builder, allocator, is_builtin_class);
+            try generateMethod(bc, code_builder, allocator, is_builtin_class, &generated_method_map);
         }
 
         if (false) {
