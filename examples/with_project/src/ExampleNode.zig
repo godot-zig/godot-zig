@@ -53,8 +53,8 @@ pub fn on_item_focused(self: *Self, idx: i64) void {
         inline 0...Examples.len - 1 => |i| {
             const n = Godot.create(Examples[i].T) catch unreachable;
             self.example_node = Godot.cast(Godot.Node, n.base);
-            self.panel.add_child(self.example_node, false, Godot.Node.INTERNAL_MODE_DISABLED);
-            self.panel.grab_focus();
+            self.panel.addChild(self.example_node, false, Godot.Node.INTERNAL_MODE_DISABLED);
+            self.panel.grabFocus();
         },
         else => {},
     }
@@ -70,19 +70,19 @@ pub fn _enter_tree(self: *Self) void {
     self.property1 = Vec3.new(111, 111, 111);
     self.property2 = Vec3.new(222, 222, 222);
 
-    if (Godot.Engine.getSingleton().is_editor_hint()) return;
+    if (Godot.Engine.getSingleton().isEditorHint()) return;
 
-    const window_size = self.get_tree().?.get_root().?.get_size();
+    const window_size = self.getTree().?.getRoot().?.getSize();
     var sp = Godot.initHSplitContainer();
-    sp.set_h_size_flags(Godot.Control.SIZE_EXPAND_FILL);
-    sp.set_v_size_flags(Godot.Control.SIZE_EXPAND_FILL);
-    sp.set_split_offset(@intFromFloat(@as(f32, @floatFromInt(window_size.x)) * 0.2));
-    sp.set_anchors_preset(Godot.Control.PRESET_FULL_RECT, false);
+    sp.setHSizeFlags(Godot.Control.SIZE_EXPAND_FILL);
+    sp.setVSizeFlags(Godot.Control.SIZE_EXPAND_FILL);
+    sp.setSplitOffset(@intFromFloat(@as(f32, @floatFromInt(window_size.x)) * 0.2));
+    sp.setAnchorsPreset(Godot.Control.PRESET_FULL_RECT, false);
     var itemList = Godot.initItemList();
     inline for (0..Examples.len) |i| {
-        _ = itemList.add_item(Examples[i].name, null, true);
+        _ = itemList.addItem(Examples[i].name, null, true);
     }
-    var timer = self.get_tree().?.create_timer(1.0, true, false, false);
+    var timer = self.getTree().?.createTimer(1.0, true, false, false);
     defer _ = timer.?.unreference();
 
     Godot.connect(timer.?, "timeout", self, "on_timeout");
@@ -90,12 +90,12 @@ pub fn _enter_tree(self: *Self) void {
 
     Godot.connect(itemList, "item_selected", self, "on_item_focused");
     self.panel = Godot.initPanelContainer();
-    self.panel.set_h_size_flags(Godot.Control.SIZE_FILL);
-    self.panel.set_v_size_flags(Godot.Control.SIZE_FILL);
-    self.panel.set_focus_mode(Godot.Control.FOCUS_ALL);
-    sp.add_child(itemList, false, Godot.Node.INTERNAL_MODE_DISABLED);
-    sp.add_child(self.panel, false, Godot.Node.INTERNAL_MODE_DISABLED);
-    self.base.add_child(sp, false, Godot.Node.INTERNAL_MODE_DISABLED);
+    self.panel.setHSizeFlags(Godot.Control.SIZE_FILL);
+    self.panel.setVSizeFlags(Godot.Control.SIZE_FILL);
+    self.panel.setFocusMode(Godot.Control.FOCUS_ALL);
+    sp.addChild(itemList, false, Godot.Node.INTERNAL_MODE_DISABLED);
+    sp.addChild(self.panel, false, Godot.Node.INTERNAL_MODE_DISABLED);
+    self.base.addChild(sp, false, Godot.Node.INTERNAL_MODE_DISABLED);
 }
 
 pub fn _exit_tree(self: *Self) void {
@@ -104,8 +104,8 @@ pub fn _exit_tree(self: *Self) void {
 
 pub fn _notification(self: *Self, what: i32) void {
     if (what == Godot.Node.NOTIFICATION_WM_CLOSE_REQUEST) {
-        if (!Godot.Engine.getSingleton().is_editor_hint()) {
-            self.get_tree().?.quit(0);
+        if (!Godot.Engine.getSingleton().isEditorHint()) {
+            self.getTree().?.quit(0);
         }
     }
 }
@@ -122,9 +122,9 @@ pub fn _get_property_list(_: *Self) []const Godot.PropertyInfo {
 }
 
 pub fn _property_can_revert(_: *Self, name: Godot.StringName) bool {
-    if (name.casecmp_to(property1_name) == 0) {
+    if (name.casecmpTo(property1_name) == 0) {
         return true;
-    } else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmpTo(property2_name) == 0) {
         return true;
     }
 
@@ -132,10 +132,10 @@ pub fn _property_can_revert(_: *Self, name: Godot.StringName) bool {
 }
 
 pub fn _property_get_revert(_: *Self, name: Godot.StringName, value: *Godot.Variant) bool {
-    if (name.casecmp_to(property1_name) == 0) {
+    if (name.casecmpTo(property1_name) == 0) {
         value.* = Godot.Variant.initFrom(Vec3.new(42, 42, 42));
         return true;
-    } else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmpTo(property2_name) == 0) {
         value.* = Godot.Variant.initFrom(Vec3.new(24, 24, 24));
         return true;
     }
@@ -144,10 +144,10 @@ pub fn _property_get_revert(_: *Self, name: Godot.StringName, value: *Godot.Vari
 }
 
 pub fn _set(self: *Self, name: Godot.StringName, value: Godot.Variant) bool {
-    if (name.casecmp_to(property1_name) == 0) {
+    if (name.casecmpTo(property1_name) == 0) {
         self.property1 = value.as(Vec3);
         return true;
-    } else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmpTo(property2_name) == 0) {
         self.property2 = value.as(Vec3);
         return true;
     }
@@ -156,10 +156,10 @@ pub fn _set(self: *Self, name: Godot.StringName, value: Godot.Variant) bool {
 }
 
 pub fn _get(self: *Self, name: Godot.StringName, value: *Godot.Variant) bool {
-    if (name.casecmp_to(property1_name) == 0) {
+    if (name.casecmpTo(property1_name) == 0) {
         value.* = Godot.Variant.initFrom(self.property1);
         return true;
-    } else if (name.casecmp_to(property2_name) == 0) {
+    } else if (name.casecmpTo(property2_name) == 0) {
         value.* = Godot.Variant.initFrom(self.property2);
         return true;
     }

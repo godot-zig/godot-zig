@@ -19,7 +19,7 @@ pub fn newSpritesNode() *Self {
 }
 
 pub fn _ready(self: *Self) void {
-    if (Godot.Engine.getSingleton().is_editor_hint()) return;
+    if (Godot.Engine.getSingleton().isEditorHint()) return;
 
     self.sprites = std.ArrayList(Sprite).init(Godot.general_allocator);
     const rnd = Godot.initRandomNumberGenerator();
@@ -28,20 +28,20 @@ pub fn _ready(self: *Self) void {
     const resource_loader = Godot.ResourceLoader.getSingleton();
     const tex = resource_loader.load("res://textures/logo.png", "", Godot.ResourceLoader.CACHE_MODE_REUSE);
     defer _ = Godot.unreference(tex.?);
-    const sz = self.get_parent_area_size();
+    const sz = self.getParentAreaSize();
 
     for (0..10000) |_| {
-        const s: f32 = @floatCast(rnd.randf_range(0.1, 0.2));
+        const s: f32 = @floatCast(rnd.randfRange(0.1, 0.2));
         const spr = Sprite{
-            .pos = Vec2.new(@floatCast(rnd.randf_range(0, sz.x)), @floatCast(rnd.randf_range(0, sz.y))),
-            .vel = Vec2.new(@floatCast(rnd.randf_range(-1000, 1000)), @floatCast(rnd.randf_range(-1000, 1000))),
+            .pos = Vec2.new(@floatCast(rnd.randfRange(0, sz.x)), @floatCast(rnd.randfRange(0, sz.y))),
+            .vel = Vec2.new(@floatCast(rnd.randfRange(-1000, 1000)), @floatCast(rnd.randfRange(-1000, 1000))),
             .scale = Vec2.set(s),
             .gd_sprite = Godot.initSprite2D(),
         };
-        spr.gd_sprite.set_texture(tex);
-        spr.gd_sprite.set_rotation(rnd.randf_range(0, 3.14));
-        spr.gd_sprite.set_scale(spr.scale);
-        self.add_child(spr.gd_sprite, false, Godot.Node.INTERNAL_MODE_DISABLED);
+        spr.gd_sprite.setTexture(tex);
+        spr.gd_sprite.setRotation(rnd.randfRange(0, 3.14));
+        spr.gd_sprite.setScale(spr.scale);
+        self.addChild(spr.gd_sprite, false, Godot.Node.INTERNAL_MODE_DISABLED);
         self.sprites.append(spr) catch unreachable;
     }
 }
@@ -51,11 +51,11 @@ pub fn _exit_tree(self: *Self) void {
 }
 
 pub fn _physics_process(self: *Self, delta: f64) void {
-    const sz = self.get_parent_area_size(); //get_size();
+    const sz = self.getParentAreaSize(); //get_size();
 
     for (self.sprites.items) |*spr| {
         const pos = spr.pos.add(spr.vel.scale(@floatCast(delta)));
-        const spr_size = spr.gd_sprite.get_rect().get_size().mul(spr.gd_sprite.get_scale());
+        const spr_size = spr.gd_sprite.getRect().getSize().mul(spr.gd_sprite.getScale());
 
         if (pos.x <= spr_size.x / 2) {
             spr.vel.x = @abs(spr.vel.x);
@@ -68,6 +68,6 @@ pub fn _physics_process(self: *Self, delta: f64) void {
             spr.vel.y = -@abs(spr.vel.y);
         }
         spr.pos = pos;
-        spr.gd_sprite.set_position(spr.pos);
+        spr.gd_sprite.setPosition(spr.pos);
     }
 }

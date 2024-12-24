@@ -2,7 +2,9 @@ const std = @import("std");
 const C = @cImport({
     @cInclude("gdextension_interface.h");
 });
+const case = @import("case");
 
+const Allocator = std.mem.Allocator;
 const GdExtensionApi = @import("extension_api.zig");
 const StreamBuilder = @import("stream_builder.zig").StreamBuilder;
 const mem = std.mem;
@@ -15,50 +17,116 @@ var outpath: []const u8 = undefined;
 var temp_buf: *StreamBuilder(u8, 1024 * 1024) = undefined;
 
 var cwd: std.fs.Dir = undefined;
-const keywords = std.StaticStringMap(void).initComptime(.{ .{"addrspace"}, .{"align"}, .{"and"}, .{"asm"}, .{"async"}, .{"await"}, .{"break"}, .{"catch"}, .{"comptime"}, .{"const"}, .{"continue"}, .{"defer"}, .{"else"}, .{"enum"}, .{"errdefer"}, .{"error"}, .{"export"}, .{"extern"}, .{"for"}, .{"if"}, .{"inline"}, .{"noalias"}, .{"noinline"}, .{"nosuspend"}, .{"opaque"}, .{"or"}, .{"orelse"}, .{"packed"}, .{"anyframe"}, .{"pub"}, .{"resume"}, .{"return"}, .{"linksection"}, .{"callconv"}, .{"struct"}, .{"suspend"}, .{"switch"}, .{"test"}, .{"threadlocal"}, .{"try"}, .{"union"}, .{"unreachable"}, .{"usingnamespace"}, .{"var"}, .{"volatile"}, .{"allowzero"}, .{"while"}, .{"anytype"}, .{"fn"} });
+
+const func_case: case.Case = .camel;
+var func_name_map: StringStringMap = undefined;
+
+const keywords = std.StaticStringMap(void).initComptime(.{
+    .{"addrspace"},
+    .{"align"},
+    .{"and"},
+    .{"asm"},
+    .{"async"},
+    .{"await"},
+    .{"break"},
+    .{"catch"},
+    .{"comptime"},
+    .{"const"},
+    .{"continue"},
+    .{"defer"},
+    .{"else"},
+    .{"enum"},
+    .{"errdefer"},
+    .{"error"},
+    .{"export"},
+    .{"extern"},
+    .{"for"},
+    .{"if"},
+    .{"inline"},
+    .{"noalias"},
+    .{"noinline"},
+    .{"nosuspend"},
+    .{"opaque"},
+    .{"or"},
+    .{"orelse"},
+    .{"packed"},
+    .{"anyframe"},
+    .{"pub"},
+    .{"resume"},
+    .{"return"},
+    .{"linksection"},
+    .{"callconv"},
+    .{"struct"},
+    .{"suspend"},
+    .{"switch"},
+    .{"test"},
+    .{"threadlocal"},
+    .{"try"},
+    .{"union"},
+    .{"unreachable"},
+    .{"usingnamespace"},
+    .{"var"},
+    .{"volatile"},
+    .{"allowzero"},
+    .{"while"},
+    .{"anytype"},
+    .{"fn"},
+});
+
 const IdentWidth = 4;
 const StringSizeMap = std.StringHashMap(i64);
 const StringBoolMap = std.StringHashMap(bool);
+const StringVoidMap = std.StringHashMap(void);
 const StringStringMap = std.StringHashMap(string);
 
 var class_size_map: StringSizeMap = undefined;
 var engine_class_map: StringBoolMap = undefined;
-const base_type_map = std.StaticStringMap(string).initComptime(.{ .{ "int", "i64" }, .{ "int8", "i8" }, .{ "uint8", "u8" }, .{ "int16", "i16" }, .{ "uint16", "u16" }, .{ "int32", "i32" }, .{ "uint32", "u32" }, .{ "int64", "i64" }, .{ "uint64", "u64" }, .{ "float", "f32" }, .{ "double", "f64" } });
-const builtin_type_map = std.StaticStringMap(void).initComptime(.{ .{"i8"}, .{"u8"}, .{"i16"}, .{"u16"}, .{"i32"}, .{"u32"}, .{"i64"}, .{"u64"}, .{"bool"}, .{"f32"}, .{"f64"}, .{"c_int"} });
-const native_type_map = std.StaticStringMap(void).initComptime(.{ .{"Vector2"}, .{"Vector2i"}, .{"Vector3"}, .{"Vector3i"}, .{"Vector4"}, .{"Vector4i"} });
+
+const base_type_map = std.StaticStringMap(string).initComptime(.{
+    .{ "int", "i64" },
+    .{ "int8", "i8" },
+    .{ "uint8", "u8" },
+    .{ "int16", "i16" },
+    .{ "uint16", "u16" },
+    .{ "int32", "i32" },
+    .{ "uint32", "u32" },
+    .{ "int64", "i64" },
+    .{ "uint64", "u64" },
+    .{ "float", "f32" },
+    .{ "double", "f64" },
+});
+
+const builtin_type_map = std.StaticStringMap(void).initComptime(.{
+    .{"i8"},
+    .{"u8"},
+    .{"i16"},
+    .{"u16"},
+    .{"i32"},
+    .{"u32"},
+    .{"i64"},
+    .{"u64"},
+    .{"bool"},
+    .{"f32"},
+    .{"f64"},
+    .{"c_int"},
+});
+
+const native_type_map = std.StaticStringMap(void).initComptime(.{
+    .{"Vector2"},
+    .{"Vector2i"},
+    .{"Vector3"},
+    .{"Vector3i"},
+    .{"Vector4"},
+    .{"Vector4i"},
+});
+
 var singletons_map: StringStringMap = undefined;
 var all_classes: std.ArrayList(string) = undefined;
 var all_engine_classes: std.ArrayList(string) = undefined;
 var depends: std.ArrayList(string) = undefined;
 
-pub fn camelCaseToSnake(in: []const u8, buf: []u8) []const u8 {
-    var j: usize = 0;
-    var prev_is_lower_case: bool = true;
-    for (in, 0..) |c, i| {
-        if (std.ascii.isUpper(c)) {
-            if (i > 0 and prev_is_lower_case and
-                !(c == 'D' and std.mem.indexOfScalar(u8, "234", in[i - 1]) != null))
-            {
-                buf[j] = '_';
-                j += 1;
-            }
-            buf[j] = std.ascii.toLower(c);
-            j += 1;
-            prev_is_lower_case = false;
-        } else {
-            prev_is_lower_case = true;
-            buf[j] = c;
-            j += 1;
-        }
-    }
-
-    //handle special cases: 2_D(3_D) should be 2D(3D)
-    if (std.mem.endsWith(u8, buf[0..j], "_d")) {
-        buf[j - 2] = 'D';
-        return buf[0 .. j - 1];
-    } else {
-        return buf[0..j];
-    }
+pub fn toSnakeCase(in: []const u8, buf: []u8) []const u8 {
+    return case.bufTo(buf, .snake, in) catch @panic("toSnakeCase failed");
 }
 
 fn parseClassSizes(api: anytype, conf_name: string) !void {
@@ -140,7 +208,7 @@ fn getEnumName(type_name: string) string {
 
 fn getVariantTypeName(class_name: string) string {
     var buf: [256]u8 = undefined;
-    const nnn = camelCaseToSnake(class_name, &buf);
+    const nnn = toSnakeCase(class_name, &buf);
     return temp_buf.bufPrint("Godot.GDEXTENSION_VARIANT_TYPE_{s}", .{std.ascii.upperString(&buf, nnn)}) catch unreachable;
 }
 
@@ -289,6 +357,8 @@ fn getArgumentsTypes(fn_node: anytype, buf: []u8) string {
 }
 
 fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocator, class_name: string, func_name: string, return_type_orig: string, comptime proc_type: ProcType) !void {
+    const zig_func_name = getZigFuncName(allocator, func_name);
+
     var return_type: string = undefined;
     if (std.mem.startsWith(u8, return_type_orig, "*")) {
         return_type = try temp_buf.bufPrint("?{s}", .{return_type_orig});
@@ -300,12 +370,15 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
         var buf: [256]u8 = undefined;
         const atypes = getArgumentsTypes(fn_node, &buf);
         if (atypes.len > 0) {
-            try code_builder.print(0, "pub fn {s}From{s}(", .{ correctName(func_name), atypes });
+            const temp_atypes_func_name = try temp_buf.bufPrint("{s}_from_{s}", .{func_name, atypes});
+            const atypes_func_name = getZigFuncName(allocator, temp_atypes_func_name);
+
+            try code_builder.print(0, "pub fn {s}(", .{ atypes_func_name });
         } else {
-            try code_builder.print(0, "pub fn {s}(", .{correctName(func_name)});
+            try code_builder.print(0, "pub fn {s}(", .{zig_func_name});
         }
     } else {
-        try code_builder.print(0, "pub fn {s}(", .{correctName(func_name)});
+        try code_builder.print(0, "pub fn {s}(", .{zig_func_name});
     }
 
     const is_const = (proc_type == .BuiltinClassMethod or proc_type == .EngineClassMethod) and fn_node.is_const;
@@ -566,19 +639,21 @@ fn generateConstructor(class_node: anytype, code_builder: anytype, allocator: me
     }
 }
 
-fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.Allocator, comptime is_builtin_class: bool) !void {
+fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.Allocator, comptime is_builtin_class: bool, generated_method_map: *StringVoidMap) !void {
     const class_name = correctName(class_node.name);
     const enum_type_name = getVariantTypeName(class_name);
 
     const proc_type = if (is_builtin_class) ProcType.BuiltinClassMethod else ProcType.EngineClassMethod;
-    var generated_method_map = StringBoolMap.init(allocator);
-    defer generated_method_map.deinit();
 
     var vf_builder = try StreamBuilder(u8, 1024 * 1024).init(allocator);
     defer vf_builder.deinit();
 
     if (class_node.methods) |ms| {
         for (ms) |m| {
+            const func_name = m.name;
+
+            const zig_func_name = getZigFuncName(allocator, func_name);
+
             if (@hasField(@TypeOf(m), "is_virtual") and m.is_virtual) {
                 if (m.arguments) |as| {
                     for (as) |a| {
@@ -588,14 +663,25 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                         }
                     }
                 }
-                const func_name = m.name;
-                try vf_builder.printLine(1, "if (@as(*StringName, @ptrCast(@constCast(p_name))).casecmp_to(\"{0s}\") == 0 and @hasDecl(T, \"{0s}\")) {{", .{func_name});
+
+                const casecmp_to_func_name = getZigFuncName(allocator, "casecmp_to");
+
+                try vf_builder.printLine(1, "if (@as(*StringName, @ptrCast(@constCast(p_name))).{1s}(\"{0s}\") == 0 and @hasDecl(T, \"{0s}\")) {{", .{
+                    func_name,
+                    casecmp_to_func_name,
+                });
 
                 try vf_builder.writeLine(2, "const MethodBinder = struct {");
 
-                try vf_builder.printLine(3, "pub fn {s}(p_instance: Godot.GDExtensionClassInstancePtr, p_args: [*c]const Godot.GDExtensionConstTypePtr, p_ret: Godot.GDExtensionTypePtr) callconv(.C) void {{", .{func_name});
-                try vf_builder.printLine(4, "const MethodBinder = Godot.MethodBinderT(@TypeOf(T.{s}));", .{func_name});
-                try vf_builder.printLine(4, "MethodBinder.bind_ptrcall(@ptrCast(@constCast(&T.{s})), p_instance, p_args, p_ret);", .{func_name});
+                try vf_builder.printLine(3, "pub fn {s}(p_instance: Godot.GDExtensionClassInstancePtr, p_args: [*c]const Godot.GDExtensionConstTypePtr, p_ret: Godot.GDExtensionTypePtr) callconv(.C) void {{", .{
+                    func_name,
+                });
+                try vf_builder.printLine(4, "const MethodBinder = Godot.MethodBinderT(@TypeOf(T.{s}));", .{
+                    func_name,
+                });
+                try vf_builder.printLine(4, "MethodBinder.bind_ptrcall(@ptrCast(@constCast(&T.{s})), p_instance, p_args, p_ret);", .{
+                    func_name,
+                });
                 try vf_builder.writeLine(3, "}");
                 try vf_builder.writeLine(2, "};");
 
@@ -603,7 +689,6 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                 try vf_builder.writeLine(1, "}");
                 continue;
             } else {
-                const func_name = m.name;
                 const return_type = blk: {
                     if (is_builtin_class) {
                         break :blk correctType(m.return_type, "");
@@ -613,16 +698,25 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                         break :blk "void";
                     }
                 };
-                try generated_method_map.put(func_name, true);
-                try generateProc(code_builder, m, allocator, class_name, func_name, return_type, proc_type);
+
+                if (!generated_method_map.contains(zig_func_name)) {
+                    try generated_method_map.putNoClobber(zig_func_name, {});
+                    try generateProc(code_builder, m, allocator, class_name, func_name, return_type, proc_type);
+                }
             }
         }
     }
     if (!is_builtin_class) {
-        try code_builder.printLine(0, "pub fn get_virtual_{s}(comptime T:type, p_userdata: ?*anyopaque, p_name: Godot.GDExtensionConstStringNamePtr) Godot.GDExtensionClassCallVirtual {{", .{class_name});
+        const temp_virtual_func_name = try std.fmt.allocPrint(allocator, "get_virtual_{s}", .{class_name});
+        const virtual_func_name = getZigFuncName(allocator, temp_virtual_func_name);
+
+        try code_builder.printLine(0, "pub fn {s}(comptime T:type, p_userdata: ?*anyopaque, p_name: Godot.GDExtensionConstStringNamePtr) Godot.GDExtensionClassCallVirtual {{", .{virtual_func_name});
         try code_builder.writeLine(0, vf_builder.getWritten());
         if (class_node.inherits.len > 0) {
-            try code_builder.printLine(1, "return Godot.{0s}.get_virtual_{0s}(T, p_userdata, p_name);", .{class_node.inherits});
+            const temp_virtual_inherits_func_name = try std.fmt.allocPrint(allocator, "get_virtual_{s}", .{class_node.inherits});
+            const virtual_inherits_func_name = getZigFuncName(allocator, temp_virtual_inherits_func_name);
+
+            try code_builder.printLine(1, "return Godot.{s}.{s}(T, p_userdata, p_name);", .{class_node.inherits, virtual_inherits_func_name});
         } else {
             try code_builder.writeLine(1, "_ = T;");
             try code_builder.writeLine(1, "_ = p_userdata;");
@@ -636,8 +730,12 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
             for (ms) |m| {
                 const member_type = correctType(m.type, "");
                 //getter
-                const getter_name = try temp_buf.bufPrint("get_{s}", .{m.name});
+                const temp_getter_name = try temp_buf.bufPrint("get_{s}", .{m.name});
+                const getter_name = getZigFuncName(allocator, temp_getter_name);
+
                 if (!generated_method_map.contains(getter_name)) {
+                    try generated_method_map.putNoClobber(getter_name, {});
+
                     try code_builder.printLine(0, "pub fn {s}(self: Self) {s} {{", .{ getter_name, member_type });
                     try code_builder.printLine(1, "var result:{s} = undefined;", .{member_type});
 
@@ -653,9 +751,13 @@ fn generateMethod(class_node: anytype, code_builder: anytype, allocator: mem.All
                 }
 
                 //setter
-                const setter_name = try temp_buf.bufPrint("set_{s}", .{m.name});
+                const temp_setter_name = try temp_buf.bufPrint("set_{s}", .{m.name});
+                const setter_name = getZigFuncName(allocator, temp_setter_name);
+
                 if (!generated_method_map.contains(setter_name)) {
-                    try code_builder.printLine(0, "pub fn set_{s}(self: *Self, v: {s}) void {{", .{ m.name, member_type });
+                    try generated_method_map.putNoClobber(setter_name, {});
+
+                    try code_builder.printLine(0, "pub fn {s}(self: *Self, v: {s}) void {{", .{ setter_name, member_type });
 
                     try code_builder.writeLine(1, "const Binding = struct{ pub var method:Godot.GDExtensionPtrSetter = null; };");
                     try code_builder.writeLine(1, "if( Binding.method == null ) {");
@@ -808,6 +910,8 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
             }
         }
 
+        var generated_method_map = StringVoidMap.init(allocator);
+
         if (isSingleton(class_name)) {
             const singleton_code =
                 \\var instance: ?{0s} = null;
@@ -820,11 +924,12 @@ fn generateClasses(api: anytype, allocator: std.mem.Allocator, comptime is_built
                 \\}}
             ;
             try code_builder.printLine(0, singleton_code, .{class_name});
+            try generated_method_map.putNoClobber("getSingleton", {});
         }
 
         if (hasAnyMethod(bc)) {
             try generateConstructor(bc, code_builder, allocator);
-            try generateMethod(bc, code_builder, allocator, is_builtin_class);
+            try generateMethod(bc, code_builder, allocator, is_builtin_class, &generated_method_map);
         }
 
         if (false) {
@@ -910,7 +1015,7 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
             var res = try std.mem.replaceOwned(u8, allocator, res2, "CallableCustomGetUserData", "CallableCustomGetUserdata");
             defer allocator.free(res);
 
-            const snake_case = camelCaseToSnake(res, &temp);
+            const snake_case = toSnakeCase(res, &temp);
             res[0] = std.ascii.toLower(res[0]);
             try code_builder.printLine(0, "pub var {s}:std.meta.Child(Godot.{s}) = undefined;", .{ res, decl.name });
             try loader_builder.printLine(1, "{s} = @ptrCast(getProcAddress(\"{s}\"));", .{ res, snake_case });
@@ -933,7 +1038,7 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
     for (all_engine_classes.items) |cls| {
         const constructor_code =
             \\pub fn init{0s}() {0s} {{
-            \\    return .{{ 
+            \\    return .{{
             \\        .godot_object = Godot.classdbConstructObject(@ptrCast(Godot.getClassName({0s})))
             \\    }};
             \\}}
@@ -950,13 +1055,23 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
     try cwd.writeFile(.{ .sub_path = file_name, .data = code_builder.getWritten() });
 }
 
+fn getZigFuncName(allocator: Allocator, godot_func_name: []const u8) []const u8 {
+    const result = func_name_map.getOrPut(godot_func_name) catch unreachable;
+
+    if (!result.found_existing) {
+        result.value_ptr.* = correctName(case.allocTo(allocator, func_case, godot_func_name) catch unreachable);
+    }
+
+    return result.value_ptr.*;
+}
+
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
 
     const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
 
     if (args.len < 4) {
         std.debug.print("Usage: binding_generator export_path generated_path precision arch\n", .{});
@@ -966,30 +1081,21 @@ pub fn main() !void {
     outpath = args[2];
 
     class_size_map = StringSizeMap.init(allocator);
-    defer class_size_map.deinit();
     engine_class_map = StringBoolMap.init(allocator);
-    defer engine_class_map.deinit();
     singletons_map = StringStringMap.init(allocator);
-    defer singletons_map.deinit();
     depends = std.ArrayList(string).init(allocator);
-    defer depends.deinit();
     all_classes = std.ArrayList(string).init(allocator);
-    defer all_classes.deinit();
     temp_buf = try StreamBuilder(u8, 1024 * 1024).init(allocator);
     all_engine_classes = std.ArrayList(string).init(allocator);
-    defer all_engine_classes.deinit();
-    defer temp_buf.deinit();
+    func_name_map = StringStringMap.init(allocator);
 
     cwd = std.fs.cwd();
 
     const fname = try std.fs.path.resolve(allocator, &.{ args[1], "extension_api.json" });
-    defer allocator.free(fname);
 
     const contents = try cwd.readFileAlloc(allocator, fname, 10 * 1024 * 1024); //"./src/api/extension_api.json", 10 * 1024 * 1024);
-    defer allocator.free(contents);
 
-    var api = try std.json.parseFromSlice(GdExtensionApi, allocator, contents, .{ .ignore_unknown_fields = false });
-    defer api.deinit();
+    const api = try std.json.parseFromSlice(GdExtensionApi, allocator, contents, .{ .ignore_unknown_fields = false });
 
     try cwd.deleteTree(outpath);
     try cwd.makePath(outpath);

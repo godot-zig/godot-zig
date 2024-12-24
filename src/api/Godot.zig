@@ -373,7 +373,7 @@ pub fn registerClass(comptime T: type) void {
             _ = p_userdata;
         }
         pub fn get_virtual_bind(p_userdata: ?*anyopaque, p_name: Core.C.GDExtensionConstStringNamePtr) callconv(.C) Core.C.GDExtensionClassCallVirtual {
-            const virtual_bind = @field(T, "get_virtual_" ++ parent_class_name);
+            const virtual_bind = @field(T, "getVirtual" ++ parent_class_name);
             return virtual_bind(T, p_userdata, p_name);
         }
         pub fn get_rid_bind(p_instance: Core.C.GDExtensionClassInstancePtr) callconv(.C) u64 {
