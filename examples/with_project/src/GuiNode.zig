@@ -9,19 +9,19 @@ base: Godot.Control,
 sprite: Godot.Sprite2D,
 
 pub fn _enter_tree(self: *Self) void {
-    if (Godot.Engine.getSingleton().is_editor_hint()) return;
+    if (Godot.Engine.getSingleton().isEditorHint()) return;
 
     var normal_btn = Godot.initButton();
-    self.add_child(normal_btn, false, Godot.Node.INTERNAL_MODE_DISABLED);
-    normal_btn.set_position(Vec2.new(100, 20), false);
-    normal_btn.set_size(Vec2.new(100, 50), false);
-    normal_btn.set_text("Press Me");
+    self.addChild(normal_btn, false, Godot.Node.INTERNAL_MODE_DISABLED);
+    normal_btn.setPosition(Vec2.new(100, 20), false);
+    normal_btn.setSize(Vec2.new(100, 50), false);
+    normal_btn.setText("Press Me");
 
     var toggle_btn = Godot.initCheckBox();
-    self.add_child(toggle_btn, false, Godot.Node.INTERNAL_MODE_DISABLED);
-    toggle_btn.set_position(Vec2.new(320, 20), false);
-    toggle_btn.set_size(Vec2.new(100, 50), false);
-    toggle_btn.set_text("Toggle Me");
+    self.addChild(toggle_btn, false, Godot.Node.INTERNAL_MODE_DISABLED);
+    toggle_btn.setPosition(Vec2.new(320, 20), false);
+    toggle_btn.setSize(Vec2.new(100, 50), false);
+    toggle_btn.setText("Toggle Me");
 
     Godot.connect(toggle_btn, "toggled", self, "on_toggled");
     Godot.connect(normal_btn, "pressed", self, "on_pressed");
@@ -32,10 +32,10 @@ pub fn _enter_tree(self: *Self) void {
     if (texture) |tex| {
         defer _ = Godot.unreference(tex);
         self.sprite = Godot.initSprite2D();
-        self.sprite.set_texture(tex);
-        self.sprite.set_position(Vec2.new(400, 300));
-        self.sprite.set_scale(Vec2.new(0.6, 0.6));
-        self.add_child(self.sprite, false, Godot.Node.INTERNAL_MODE_DISABLED);
+        self.sprite.setTexture(tex);
+        self.sprite.setPosition(Vec2.new(400, 300));
+        self.sprite.setScale(Vec2.new(0.6, 0.6));
+        self.addChild(self.sprite, false, Godot.Node.INTERNAL_MODE_DISABLED);
     }
 }
 
