@@ -1,4 +1,5 @@
 const std = @import("std");
+const path = std.fs.path;
 
 const BINDGEN_INSTALL_RELPATH = "bindgen";
 
@@ -85,7 +86,10 @@ fn build_bindgen(
 ) BindgenOutput {
     const bind_step = b.step("bindgen", "Generate godot bindings");
     const run_binding_generator = std.Build.Step.Run.create(b, "run_binding_generator");
-    const output_path = b.makeTempPath();
+
+    const output_path = makeTempPathRelative(b) catch unreachable;
+    defer b.allocator.free(output_path);
+
     run_binding_generator.addArtifactArg(binding_generator);
     run_binding_generator.addDirectoryArg(godot_headers_path);
     const output_lazypath = run_binding_generator.addOutputDirectoryArg(output_path);
@@ -162,4 +166,8 @@ fn build_gdextension(
         .api_json = api_json,
         .iface_headers = iface_headers,
     };
+}
+
+fn makeTempPathRelative(b: *std.Build) ![]const u8 {
+    return try path.relative(b.allocator, b.build_root.path.?, b.makeTempPath());
 }
