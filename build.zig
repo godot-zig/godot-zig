@@ -29,6 +29,9 @@ pub fn build(b: *std.Build) !void {
     binding_generator_step.dependOn(&binding_generator.step);
     b.installArtifact(binding_generator);
 
+    const lib_case = b.dependency("case", .{});
+    binding_generator.root_module.addImport("case", lib_case.module("case"));
+
     const bindgen = build_bindgen(b, gdextension.iface_headers.dirname(), binding_generator, precision, arch);
 
     const lib = b.addSharedLibrary(.{
