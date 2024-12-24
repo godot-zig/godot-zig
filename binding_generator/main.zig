@@ -951,12 +951,12 @@ fn generateGodotCore(allocator: std.mem.Allocator) !void {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
 
     const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
 
     if (args.len < 4) {
         std.debug.print("Usage: binding_generator export_path generated_path precision arch\n", .{});
@@ -966,30 +966,21 @@ pub fn main() !void {
     outpath = args[2];
 
     class_size_map = StringSizeMap.init(allocator);
-    defer class_size_map.deinit();
     engine_class_map = StringBoolMap.init(allocator);
-    defer engine_class_map.deinit();
     singletons_map = StringStringMap.init(allocator);
-    defer singletons_map.deinit();
     depends = std.ArrayList(string).init(allocator);
-    defer depends.deinit();
     all_classes = std.ArrayList(string).init(allocator);
-    defer all_classes.deinit();
     temp_buf = try StreamBuilder(u8, 1024 * 1024).init(allocator);
     all_engine_classes = std.ArrayList(string).init(allocator);
-    defer all_engine_classes.deinit();
-    defer temp_buf.deinit();
+    func_name_map = StringStringMap.init(allocator);
 
     cwd = std.fs.cwd();
 
     const fname = try std.fs.path.resolve(allocator, &.{ args[1], "extension_api.json" });
-    defer allocator.free(fname);
 
     const contents = try cwd.readFileAlloc(allocator, fname, 10 * 1024 * 1024); //"./src/api/extension_api.json", 10 * 1024 * 1024);
-    defer allocator.free(contents);
 
-    var api = try std.json.parseFromSlice(GdExtensionApi, allocator, contents, .{ .ignore_unknown_fields = false });
-    defer api.deinit();
+    const api = try std.json.parseFromSlice(GdExtensionApi, allocator, contents, .{ .ignore_unknown_fields = false });
 
     try cwd.deleteTree(outpath);
     try cwd.makePath(outpath);
