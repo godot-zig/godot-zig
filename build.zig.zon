@@ -1,6 +1,12 @@
 .{
     .name = "godot",
     .version = "0.0.0-dev",
+    .dependencies = .{
+        .case = .{
+            .url = "git+https://github.com/travisstaloch/case#698a01886de891c03434f34e6bca95546026eb0f",
+            .hash = "12207c971fe9b4d6430503d3a4d00c6296f52b52da47c11cb8e37706e86c3ffee49e",
+        },
+    },
     .minimum_zig_version = "0.13.0",
 
     .paths = .{

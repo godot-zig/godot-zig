@@ -9,7 +9,7 @@ base: Base,
 sprite: Godot.Sprite2D,
 
 pub fn _enter_tree(self: *Self) void {
-    if (Godot.Engine.getSingleton().is_editor_hint()) return;
+    if (Godot.Engine.getSingleton().isEditorHint()) return;
 
     var normal_btn = Godot.initButton();
     self.add_child(normal_btn, false, Godot.Node.INTERNAL_MODE_DISABLED);
