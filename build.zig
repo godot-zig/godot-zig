@@ -14,6 +14,9 @@ pub fn build(b: *std.Build) !void {
         "headers",
         "Where to source Godot header files. [options: GENERATED, VENDORED, <dir_path>] [default: GENERATED]",
     ) orelse "GENERATED";
+    const build_options = b.addOptions();
+    build_options.addOption([]const u8, "precision", precision);
+    build_options.addOption([]const u8, "headers", headers);
 
     const gdextension = build_gdextension(b, godot_path, headers);
     const binding_generator_step = b.step("binding_generator", "Build the binding_generator program");
@@ -34,25 +37,15 @@ pub fn build(b: *std.Build) !void {
 
     const bindgen = build_bindgen(b, gdextension.iface_headers.dirname(), binding_generator, precision, arch);
 
-    const lib = b.addSharedLibrary(.{
-        .name = "godot",
-        .root_source_file = b.path(b.pathJoin(&.{ "src", "api", "Godot.zig" })),
-        .target = target,
-        .optimize = optimize,
-    });
     const godot_module = b.addModule("godot", .{
         .root_source_file = b.path(b.pathJoin(&.{ "src", "api", "Godot.zig" })),
         .target = target,
         .optimize = optimize,
     });
-    godot_module.addAnonymousImport("GodotCore", .{
-        .root_source_file = bindgen.godot_core_path,
-        .link_libc = true,
-        .optimize = optimize,
-        .target = target,
-    });
+    godot_module.addOptions("build_options", build_options);
     godot_module.addIncludePath(bindgen.output_path);
     godot_module.addIncludePath(gdextension.iface_headers.dirname());
+
     const godot_core_module = b.addModule("GodotCore", .{
         .root_source_file = bindgen.godot_core_path,
         .target = target,
@@ -60,17 +53,8 @@ pub fn build(b: *std.Build) !void {
     });
     godot_core_module.addIncludePath(gdextension.iface_headers.dirname());
     godot_core_module.addImport("godot", godot_module);
-    lib.root_module.addImport("godot", godot_module);
-    godot_module.addImport("GodotCore", godot_core_module);
-    lib.root_module.addImport("GodotCore", godot_core_module);
 
-    const build_options = b.addOptions();
-    build_options.addOption([]const u8, "precision", precision);
-    build_options.addOption([]const u8, "headers", headers);
-    lib.root_module.addOptions("build_options", build_options);
-    godot_module.addOptions("build_options", build_options);
-    lib.step.dependOn(bindgen.step);
-    b.installArtifact(lib);
+    godot_module.addImport("GodotCore", godot_core_module);
 }
 
 const BindgenOutput = struct {
