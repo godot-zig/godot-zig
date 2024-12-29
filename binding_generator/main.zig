@@ -481,9 +481,9 @@ fn generateProc(code_builder: anytype, fn_node: anytype, allocator: mem.Allocato
         try code_builder.printLine(1, "var args:[{d}]Godot.GDExtensionConstTypePtr = undefined;", .{args.items.len});
         for (0..args.items.len) |i| {
             if (isEngineClass(arg_types.items[i])) {
-                try code_builder.printLine(1, "if(@typeInfo(@TypeOf({1s})) == .Struct) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr(&{1s})); }}", .{ i, args.items[i] });
-                try code_builder.printLine(1, "else if(@typeInfo(@TypeOf({1s})) == .Optional) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr(&{1s}.?)); }}", .{ i, args.items[i] });
-                try code_builder.printLine(1, "else if(@typeInfo(@TypeOf({1s})) == .Pointer) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr({1s})); }}", .{ i, args.items[i] });
+                try code_builder.printLine(1, "if(@typeInfo(@TypeOf({1s})) == .@\"struct\") {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr(&{1s})); }}", .{ i, args.items[i] });
+                try code_builder.printLine(1, "else if(@typeInfo(@TypeOf({1s})) == .optional) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr(&{1s}.?)); }}", .{ i, args.items[i] });
+                try code_builder.printLine(1, "else if(@typeInfo(@TypeOf({1s})) == .pointer) {{ args[{0d}] = @ptrCast(Godot.getGodotObjectPtr({1s})); }}", .{ i, args.items[i] });
                 try code_builder.printLine(1, "else {{ args[{0d}] = null; }}", .{i});
             } else {
                 if ((proc_type != .Constructor or !isStringType(class_name)) and (isStringType(arg_types.items[i]))) {
